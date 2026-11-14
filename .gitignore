@@ -1,0 +1,47 @@
+# Dependencies & builds
+node_modules/
+vendor/
+dist/
+frontend/dist/
+backend/public/build/
+backend/public/hot/
+backend/public/storage
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# Storage & caches
+backend/storage/*.key
+backend/storage/logs/*
+backend/storage/framework/cache/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+backend/bootstrap/cache/*.php
+!backend/storage/logs/.gitignore
+!backend/storage/framework/cache/.gitignore
+!backend/storage/framework/sessions/.gitignore
+!backend/storage/framework/views/.gitignore
+!backend/bootstrap/cache/.gitignore
+
+# Uploaded media (keep directory placeholders)
+backend/storage/app/public/avatars/
+backend/storage/app/public/branding/
+
+# Local databases
+*.sqlite
+*.sqlite-journal
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
+*.local
+
+frontend/dev-dist/
