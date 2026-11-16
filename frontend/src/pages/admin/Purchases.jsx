@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import Modal from '../../components/Modal'
+import PageHeader from '../../components/PageHeader'
 import Pagination from '../../components/Pagination'
 import { useLanguage } from '../../context/LanguageContext'
 import api, { formatMMK, getErrorMessage } from '../../lib/api'
@@ -23,6 +24,7 @@ const emptyForm = {
   product_code: '',
   product_type: 'Gold',
   amount: '',
+  points_to_redeem: '0',
   payment_method: 'Cash',
 }
 
@@ -87,6 +89,7 @@ export default function AdminPurchases() {
       product_code: purchase.product_code,
       product_type: purchase.product_type,
       amount: String(purchase.amount),
+      points_to_redeem: String(purchase.points_redeemed || 0),
       payment_method: purchase.payment_method,
     })
     setError('')
@@ -107,6 +110,7 @@ export default function AdminPurchases() {
       ...form,
       user_id: Number(form.user_id),
       amount: Number(form.amount),
+      points_to_redeem: Number(form.points_to_redeem || 0),
     }
     try {
       if (editing) {
@@ -139,19 +143,19 @@ export default function AdminPurchases() {
 
   return (
     <div className="space-y-5">
-      <header className="page-header">
-        <div>
-          <h1 className="page-title">
-            <FontAwesomeIcon icon={faBoxOpen} className="text-[var(--color-primary)]" aria-hidden="true" />
-            {t('purchases')}
-          </h1>
-          <p className="page-subtitle">{t('purchasesSubtitle')}</p>
-        </div>
-        <button type="button" className="btn btn-primary" onClick={openCreate}>
-          <FontAwesomeIcon icon={faPlus} aria-hidden="true" />
-          {t('recordPurchase')}
-        </button>
-      </header>
+      <PageHeader
+        title={t('purchases')}
+        subtitle={t('purchasesSubtitle')}
+        icon={faBoxOpen}
+        backTo="/admin"
+        backLabel={t('backToDashboard')}
+        actions={(
+          <button type="button" className="btn btn-primary" onClick={openCreate}>
+            <FontAwesomeIcon icon={faPlus} aria-hidden="true" />
+            {t('recordPurchase')}
+          </button>
+        )}
+      />
 
       {error && <div className="alert alert-error" role="alert">{error}</div>}
       {message && <div className="alert alert-ok" role="status" aria-live="polite">{message}</div>}
@@ -177,41 +181,45 @@ export default function AdminPurchases() {
         </button>
       </form>
 
-      <div className="table-wrap">
+      <div className="table-wrap is-stackable">
         <table className="data" aria-label={t('purchases')}>
           <thead>
             <tr>
               <th scope="col">{t('product')}</th>
-              <th scope="col">{t('type')}</th>
+              <th scope="col" className="hide-mobile">{t('type')}</th>
               <th scope="col">{t('customerId')}</th>
               <th scope="col">{t('customer')}</th>
-              <th scope="col">{t('amount')}</th>
-              <th scope="col">{t('discount')}</th>
-              <th scope="col">{t('net')}</th>
-              <th scope="col">{t('payment')}</th>
+              <th scope="col" className="hide-mobile">{t('amount')}</th>
+              <th scope="col" className="hide-mobile">{t('pointsRedeemed')}</th>
+              <th scope="col">{t('payable')}</th>
+              <th scope="col">{t('pointsEarned')}</th>
+              <th scope="col" className="hide-mobile">{t('payment')}</th>
               <th scope="col">{t('actions')}</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={9} className="loading-state" role="status" aria-live="polite">{t('loading')}</td>
+                <td colSpan={10} className="loading-state" role="status" aria-live="polite">{t('loading')}</td>
               </tr>
             )}
             {!loading && purchases.map((p) => (
               <tr key={p.id}>
-                <td>
+                <td data-label={t('product')}>
                   <div className="font-medium">{p.product_name}</div>
-                  <div className="text-xs text-[var(--color-muted)]">{p.product_code}</div>
+                  <div className="type-meta text-[var(--color-muted)]">{p.product_code}</div>
                 </td>
-                <td>{t(p.product_type) !== p.product_type ? t(p.product_type) : p.product_type}</td>
-                <td className="font-medium">{p.user?.customer_code || '—'}</td>
-                <td>{p.user?.name}</td>
-                <td>{formatMMK(p.amount)}</td>
-                <td>{p.discount_percent}%</td>
-                <td>{formatMMK(p.net_amount)}</td>
-                <td>{p.payment_method}</td>
-                <td>
+                <td data-label={t('type')} className="hide-mobile">
+                  {t(p.product_type) !== p.product_type ? t(p.product_type) : p.product_type}
+                </td>
+                <td data-label={t('customerId')} className="font-medium">{p.user?.customer_code || '—'}</td>
+                <td data-label={t('customer')}>{p.user?.name}</td>
+                <td data-label={t('amount')} className="hide-mobile">{formatMMK(p.amount)}</td>
+                <td data-label={t('pointsRedeemed')} className="hide-mobile">{Number(p.points_redeemed || 0).toLocaleString()}</td>
+                <td data-label={t('payable')}>{formatMMK(p.net_amount)}</td>
+                <td data-label={t('pointsEarned')}>{Number(p.points_earned || 0).toLocaleString()}</td>
+                <td data-label={t('payment')} className="hide-mobile">{p.payment_method}</td>
+                <td data-label={t('actions')}>
                   <div className="action-row">
                     <button
                       type="button"
@@ -237,7 +245,7 @@ export default function AdminPurchases() {
             ))}
             {!loading && !purchases.length && (
               <tr>
-                <td colSpan={9} className="empty-state">{t('noPurchasesFound')}</td>
+                <td colSpan={10} className="empty-state">{t('noPurchasesFound')}</td>
               </tr>
             )}
           </tbody>
@@ -263,7 +271,7 @@ export default function AdminPurchases() {
               <option value="">{t('selectCustomer')}</option>
               {customers.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.customer_code ? `${c.customer_code} · ` : ''}{c.name} · {t(c.tier)} · {c.phone}
+                  {c.customer_code ? `${c.customer_code} · ` : ''}{c.name} · {t(c.tier)} · {Number(c.redeemable_points || c.points || 0).toLocaleString()} pts · {c.phone}
                 </option>
               ))}
             </select>
@@ -323,7 +331,18 @@ export default function AdminPurchases() {
               onChange={(e) => setForm({ ...form, amount: e.target.value })}
             />
           </div>
-          <p className="text-xs text-[var(--color-muted)]">{t('purchaseHint')}</p>
+          <div className="field">
+            <label htmlFor="purchase-points-redeem">{t('pointsToRedeem')}</label>
+            <input
+              id="purchase-points-redeem"
+              type="number"
+              min={0}
+              step={100}
+              value={form.points_to_redeem}
+              onChange={(e) => setForm({ ...form, points_to_redeem: e.target.value })}
+            />
+          </div>
+          <p className="type-meta text-[var(--color-muted)]">{t('purchaseHint')}</p>
           <div className="flex justify-end gap-2 pt-2 flex-wrap">
             <button type="button" className="btn btn-ghost" onClick={closeModal}>
               <FontAwesomeIcon icon={faXmark} aria-hidden="true" />

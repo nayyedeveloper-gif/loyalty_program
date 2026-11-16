@@ -74,10 +74,10 @@ export default function AdminDashboard() {
             style={{ animationDelay: `${i * 0.05}s` }}
           >
             <div className="flex items-center justify-between gap-2">
-              <div className="text-xs uppercase tracking-[0.14em] text-[var(--color-muted)]">{stat.label}</div>
+              <div className="meta-label">{stat.label}</div>
               <FontAwesomeIcon icon={stat.icon} className="text-[var(--color-primary)]" />
             </div>
-            <div className="mt-2 text-2xl font-semibold">{stat.value}</div>
+            <div className="stat-value mt-2">{stat.value}</div>
           </Link>
         ))}
       </div>
@@ -85,11 +85,11 @@ export default function AdminDashboard() {
       <section className="grid gap-5 lg:grid-cols-2">
         <div className="stat-card">
           <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold flex items-center gap-2 m-0">
+            <h2 className="section-heading flex items-center gap-2">
               <FontAwesomeIcon icon={faCrown} className="text-[var(--color-primary)]" />
               {t('tierDistribution')}
             </h2>
-            <Link to="/admin/customers" className="text-sm text-[var(--color-primary)] font-medium">
+            <Link to="/admin/customers" className="type-small text-[var(--color-primary)] font-medium">
               {t('customers')}
             </Link>
           </div>
@@ -108,7 +108,7 @@ export default function AdminDashboard() {
         </div>
 
         <Link to="/admin/purchases" className="stat-card stat-card-link block no-underline text-inherit">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <h2 className="section-heading mb-4 flex items-center gap-2">
             <FontAwesomeIcon icon={faReceipt} className="text-[var(--color-primary)]" />
             {t('recentPurchases')}
           </h2>
@@ -117,16 +117,16 @@ export default function AdminDashboard() {
               <div key={p.id} className="flex items-start justify-between gap-3 border-b border-[var(--color-line)] pb-3">
                 <div>
                   <div className="font-medium">{p.product_name}</div>
-                  <div className="text-xs text-[var(--color-muted)]">
+                  <div className="type-meta text-[var(--color-muted)]">
                     {p.user?.customer_code ? `${p.user.customer_code} · ` : ''}
                     {p.user?.name} · {p.payment_method}
                   </div>
                 </div>
-                <div className="text-right text-sm font-semibold">{formatMMK(p.net_amount)}</div>
+                <div className="type-small text-right font-semibold">{formatMMK(p.net_amount)}</div>
               </div>
             ))}
             {!data.recent_purchases.length && (
-              <p className="text-sm text-[var(--color-muted)]">{t('noPurchasesYet')}</p>
+              <p className="type-small text-[var(--color-muted)]">{t('noPurchasesYet')}</p>
             )}
           </div>
         </Link>

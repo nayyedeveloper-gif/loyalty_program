@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import Modal from '../../components/Modal'
+import PageHeader from '../../components/PageHeader'
 import Pagination from '../../components/Pagination'
 import { useLanguage } from '../../context/LanguageContext'
 import api, { formatMMK, getErrorMessage } from '../../lib/api'
@@ -141,19 +142,19 @@ export default function AdminCustomers() {
 
   return (
     <div className="space-y-5">
-      <header className="page-header">
-        <div>
-          <h1 className="page-title">
-            <FontAwesomeIcon icon={faUsers} className="text-[var(--color-primary)]" aria-hidden="true" />
-            {t('customers')}
-          </h1>
-          <p className="page-subtitle">{t('manageMembers')}</p>
-        </div>
-        <button type="button" className="btn btn-primary" onClick={openCreate}>
-          <FontAwesomeIcon icon={faPlus} aria-hidden="true" />
-          {t('addCustomer')}
-        </button>
-      </header>
+      <PageHeader
+        title={t('customers')}
+        subtitle={t('manageMembers')}
+        icon={faUsers}
+        backTo="/admin"
+        backLabel={t('backToDashboard')}
+        actions={(
+          <button type="button" className="btn btn-primary" onClick={openCreate}>
+            <FontAwesomeIcon icon={faPlus} aria-hidden="true" />
+            {t('addCustomer')}
+          </button>
+        )}
+      />
 
       {error && <div className="alert alert-error" role="alert">{error}</div>}
       {message && <div className="alert alert-ok" role="status" aria-live="polite">{message}</div>}
@@ -185,7 +186,7 @@ export default function AdminCustomers() {
           }}
         >
           <option value="">{t('allTiers')}</option>
-          {['Silver', 'Gold', 'Platinum', 'Diamond'].map((tierName) => (
+          {['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond'].map((tierName) => (
             <option key={tierName} value={tierName}>{t(tierName)}</option>
           ))}
         </select>
@@ -195,16 +196,17 @@ export default function AdminCustomers() {
         </button>
       </form>
 
-      <div className="table-wrap">
+      <div className="table-wrap is-stackable">
         <table className="data" aria-label={t('customers')}>
           <thead>
             <tr>
               <th scope="col">{t('customerId')}</th>
               <th scope="col">{t('name')}</th>
               <th scope="col">{t('phone')}</th>
-              <th scope="col">{t('address')}</th>
+              <th scope="col" className="hide-mobile">{t('address')}</th>
               <th scope="col">{t('totalSpent')}</th>
-              <th scope="col">{t('points')}</th>
+              <th scope="col">{t('redeemablePoints')}</th>
+              <th scope="col" className="hide-mobile">{t('tierPoints365')}</th>
               <th scope="col">{t('tier')}</th>
               <th scope="col">{t('actions')}</th>
             </tr>
@@ -212,22 +214,23 @@ export default function AdminCustomers() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={8} className="loading-state" role="status" aria-live="polite">{t('loading')}</td>
+                <td colSpan={9} className="loading-state" role="status" aria-live="polite">{t('loading')}</td>
               </tr>
             )}
             {!loading && customers.map((c) => (
               <tr key={c.id}>
-                <td className="font-medium text-[var(--color-ink)]">{c.customer_code || '—'}</td>
-                <td>
+                <td data-label={t('customerId')} className="font-medium text-[var(--color-ink)]">{c.customer_code || '—'}</td>
+                <td data-label={t('name')}>
                   <div className="font-medium">{c.name}</div>
-                  <div className="text-xs text-[var(--color-muted)]">{c.email}</div>
+                  <div className="type-meta text-[var(--color-muted)]">{c.email}</div>
                 </td>
-                <td>{c.phone}</td>
-                <td>{c.address || '—'}</td>
-                <td>{formatMMK(c.total_spent)}</td>
-                <td>{c.points.toLocaleString()}</td>
-                <td><span className={`tier-pill tier-${c.tier}`}>{t(c.tier)}</span></td>
-                <td>
+                <td data-label={t('phone')}>{c.phone}</td>
+                <td data-label={t('address')} className="hide-mobile">{c.address || '—'}</td>
+                <td data-label={t('totalSpent')}>{formatMMK(c.total_spent)}</td>
+                <td data-label={t('redeemablePoints')}>{Number(c.redeemable_points ?? c.points ?? 0).toLocaleString()}</td>
+                <td data-label={t('tierPoints365')} className="hide-mobile">{Number(c.tier_points_365d ?? 0).toLocaleString()}</td>
+                <td data-label={t('tier')}><span className={`tier-pill tier-${c.tier}`}>{t(c.tier)}</span></td>
+                <td data-label={t('actions')}>
                   <div className="action-row">
                     <button
                       type="button"
@@ -253,7 +256,7 @@ export default function AdminCustomers() {
             ))}
             {!loading && !customers.length && (
               <tr>
-                <td colSpan={8} className="empty-state">{t('noCustomers')}</td>
+                <td colSpan={9} className="empty-state">{t('noCustomers')}</td>
               </tr>
             )}
           </tbody>

@@ -2,9 +2,12 @@
 
 namespace App\Models;
 
+use App\Models\LoyaltySetting;
+use App\Services\PointsEngine;
 use App\Services\TierService;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -17,6 +20,8 @@ class User extends Authenticatable
 
     protected $fillable = [
         'customer_code',
+        'referral_code',
+        'referred_by',
         'name',
         'email',
         'phone',
@@ -26,7 +31,12 @@ class User extends Authenticatable
         'role',
         'tier',
         'points',
+        'redeemable_points',
+        'tier_points_365d',
         'total_spent',
+        'last_activity_at',
+        'login_streak',
+        'last_login_streak_date',
         'password',
     ];
 
@@ -39,6 +49,8 @@ class User extends Authenticatable
         'discount_percent',
         'next_tier',
         'avatar_url',
+        'earn_multiplier',
+        'points_expire_at',
     ];
 
     protected static function booted(): void
@@ -46,6 +58,15 @@ class User extends Authenticatable
         static::creating(function (User $user) {
             if ($user->role === 'customer' && blank($user->customer_code)) {
                 $user->customer_code = static::nextCustomerCode();
+            }
+            if ($user->role === 'customer' && blank($user->tier)) {
+                $user->tier = 'Bronze';
+            }
+        });
+
+        static::created(function (User $user) {
+            if ($user->role === 'customer') {
+                PointsEngine::ensureReferralCode($user);
             }
         });
     }
@@ -56,8 +77,13 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'points' => 'integer',
+            'redeemable_points' => 'integer',
+            'tier_points_365d' => 'integer',
             'total_spent' => 'integer',
             'preferences' => 'array',
+            'last_activity_at' => 'datetime',
+            'login_streak' => 'integer',
+            'last_login_streak_date' => 'date',
         ];
     }
 
@@ -92,6 +118,16 @@ class User extends Authenticatable
         return $this->hasMany(Purchase::class);
     }
 
+    public function ledgerEntries(): HasMany
+    {
+        return $this->hasMany(PointLedger::class);
+    }
+
+    public function referrer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'referred_by');
+    }
+
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
@@ -104,11 +140,26 @@ class User extends Authenticatable
 
     public function getDiscountPercentAttribute(): int
     {
-        return TierService::discountForTier($this->tier ?? 'Silver');
+        return 0;
+    }
+
+    public function getEarnMultiplierAttribute(): float
+    {
+        return TierService::multiplierForTier($this->tier ?? 'Bronze');
     }
 
     public function getNextTierAttribute(): ?array
     {
         return TierService::nextTier($this);
+    }
+
+    public function getPointsExpireAtAttribute(): ?string
+    {
+        if (! $this->last_activity_at) {
+            return null;
+        }
+        $days = LoyaltySetting::getInt('inactivity_days', 365);
+
+        return $this->last_activity_at->copy()->addDays($days)->toIso8601String();
     }
 }

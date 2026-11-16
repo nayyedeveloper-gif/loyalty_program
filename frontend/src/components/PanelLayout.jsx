@@ -6,7 +6,13 @@ import { useLanguage } from '../context/LanguageContext'
 import LanguageSwitcher from './LanguageSwitcher'
 import ThemeSwitcher from './ThemeSwitcher'
 import BrandLogo from './BrandLogo'
-import { faChevronRight, faRightFromBracket } from '../lib/icons'
+import {
+  faChevronRight,
+  faCircleQuestion,
+  faEllipsis,
+  faGear,
+  faRightFromBracket,
+} from '../lib/icons'
 
 function SidebarPanelIcon() {
   return (
@@ -49,6 +55,8 @@ export default function PanelLayout({ titleKey, links }) {
   const toggleRef = useRef(null)
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebarCollapsed') === '1')
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false)
+  const accountMenuRef = useRef(null)
   const [openMenus, setOpenMenus] = useState(() => {
     const initial = {}
     links.forEach((link) => {
@@ -68,6 +76,11 @@ export default function PanelLayout({ titleKey, links }) {
   }, [isMobile])
 
   useEffect(() => {
+    setMobileOpen(false)
+    setAccountMenuOpen(false)
+  }, [location.pathname])
+
+  useEffect(() => {
     setOpenMenus((prev) => {
       const next = { ...prev }
       links.forEach((link) => {
@@ -81,6 +94,8 @@ export default function PanelLayout({ titleKey, links }) {
 
   useEffect(() => {
     if (!isMobile || !mobileOpen) return undefined
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
     function onKeyDown(e) {
       if (e.key === 'Escape') {
         setMobileOpen(false)
@@ -88,13 +103,38 @@ export default function PanelLayout({ titleKey, links }) {
       }
     }
     document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', onKeyDown)
+    }
   }, [isMobile, mobileOpen])
 
+  useEffect(() => {
+    if (!accountMenuOpen) return undefined
+    function onPointerDown(e) {
+      if (!accountMenuRef.current?.contains(e.target)) {
+        setAccountMenuOpen(false)
+      }
+    }
+    function onKeyDown(e) {
+      if (e.key === 'Escape') setAccountMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [accountMenuOpen])
+
   async function onLogout() {
+    setAccountMenuOpen(false)
     await logout()
     navigate('/signin')
   }
+
+  const settingsPath = user?.role === 'admin' ? '/admin/settings/general' : '/app/settings/general'
+  const helpPath = user?.role === 'admin' ? '/admin/help' : '/app/help'
 
   function toggleSidebar() {
     if (isMobile) {
@@ -124,9 +164,10 @@ export default function PanelLayout({ titleKey, links }) {
     : (collapsed ? t('expandSidebar') : t('collapseSidebar'))
   const sidebarHidden = isMobile && !mobileOpen
   const showLabels = !collapsed || isMobile
+  const shellCollapsed = collapsed && !isMobile
 
   return (
-    <div className={`panel-shell ${collapsed ? 'sidebar-collapsed' : ''} ${mobileOpen ? 'sidebar-mobile-open' : ''}`}>
+    <div className={`panel-shell ${shellCollapsed ? 'sidebar-collapsed' : ''} ${mobileOpen ? 'sidebar-mobile-open' : ''}`}>
       <a href="#main-content" className="skip-link">{t('skipToContent')}</a>
 
       {mobileOpen && (
@@ -149,15 +190,15 @@ export default function PanelLayout({ titleKey, links }) {
         {...(sidebarHidden ? { inert: '' } : {})}
       >
         <div className="sidebar-top">
-          <div className={`sidebar-brand ${collapsed ? 'is-collapsed' : ''}`}>
+          <div className={`sidebar-brand ${shellCollapsed ? 'is-collapsed' : ''}`}>
             <BrandLogo
               size="sm"
               to="/"
               variant="light"
-              showText={!collapsed}
+              showText={showLabels}
               className="sidebar-brand-logo"
             />
-            {!collapsed && <div className="sidebar-brand-sub">{t(titleKey)}</div>}
+            {showLabels && <div className="sidebar-brand-sub">{t(titleKey)}</div>}
           </div>
         </div>
 
@@ -233,16 +274,58 @@ export default function PanelLayout({ titleKey, links }) {
         </nav>
 
         <div className="sidebar-footer">
-          <div className="sidebar-user-card">
-            <div className="sidebar-avatar" aria-hidden="true">
-              {user?.avatar_url ? <img src={user.avatar_url} alt="" /> : initials}
-            </div>
-            {!collapsed && (
-              <div className="sidebar-user">
-                <div className="sidebar-user-name">{user?.name}</div>
-                <div className="sidebar-user-email">{user?.email}</div>
+          <div className="sidebar-account" ref={accountMenuRef}>
+            {accountMenuOpen && (
+              <div className="sidebar-account-menu" role="menu" aria-label={t('accountMenu')}>
+                <button
+                  type="button"
+                  className="sidebar-account-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setAccountMenuOpen(false)
+                    closeMobile()
+                    navigate(settingsPath)
+                  }}
+                >
+                  <FontAwesomeIcon icon={faGear} aria-hidden="true" />
+                  <span>{t('settings')}</span>
+                </button>
+                <button
+                  type="button"
+                  className="sidebar-account-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setAccountMenuOpen(false)
+                    closeMobile()
+                    navigate(helpPath)
+                  }}
+                >
+                  <FontAwesomeIcon icon={faCircleQuestion} aria-hidden="true" />
+                  <span>{t('helpFeedback')}</span>
+                </button>
               </div>
             )}
+            <button
+              type="button"
+              className={`sidebar-user-card ${accountMenuOpen ? 'is-open' : ''}`}
+              onClick={() => setAccountMenuOpen((open) => !open)}
+              aria-haspopup="menu"
+              aria-expanded={accountMenuOpen}
+              title={user?.name || t('accountMenu')}
+            >
+              <div className="sidebar-avatar" aria-hidden="true">
+                {user?.avatar_url ? <img src={user.avatar_url} alt="" /> : initials}
+              </div>
+              {showLabels && (
+                <>
+                  <div className="sidebar-user">
+                    <div className="sidebar-user-name">{user?.name}</div>
+                    <div className="sidebar-user-email">{user?.email}</div>
+                  </div>
+                  <FontAwesomeIcon icon={faEllipsis} className="sidebar-user-more" aria-hidden="true" />
+                </>
+              )}
+            </button>
           </div>
           <button type="button" className="btn btn-sidebar-logout" onClick={onLogout} title={t('signOut')} aria-label={t('signOut')}>
             <FontAwesomeIcon icon={faRightFromBracket} aria-hidden="true" />
@@ -270,8 +353,8 @@ export default function PanelLayout({ titleKey, links }) {
           </div>
           <div className="panel-topbar-actions">
             <ThemeSwitcher variant="icon" />
-            <LanguageSwitcher />
-            <span className="role-badge">
+            <LanguageSwitcher compact={isMobile} />
+            <span className="role-badge desktop-only">
               {user?.role === 'admin' ? t('adminPortal') : t('memberApp')}
             </span>
           </div>

@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\PointLedger;
 use App\Models\Purchase;
 use App\Models\User;
+use App\Services\TierService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 
@@ -24,19 +26,20 @@ class DashboardController extends Controller
             ->limit(8)
             ->get();
 
+        $distribution = [];
+        foreach (array_keys(TierService::tiersMap()) as $tierName) {
+            $distribution[$tierName] = (int) ($tierDistribution[$tierName] ?? 0);
+        }
+
         return response()->json([
             'stats' => [
                 'customers' => $customers->count(),
                 'purchases' => Purchase::count(),
                 'revenue' => (int) Purchase::sum('net_amount'),
-                'points_issued' => (int) Purchase::sum('points_earned'),
+                'points_issued' => (int) PointLedger::where('points', '>', 0)->sum('points'),
+                'redeemable_points' => (int) User::where('role', 'customer')->sum('redeemable_points'),
             ],
-            'tier_distribution' => [
-                'Silver' => (int) ($tierDistribution['Silver'] ?? 0),
-                'Gold' => (int) ($tierDistribution['Gold'] ?? 0),
-                'Platinum' => (int) ($tierDistribution['Platinum'] ?? 0),
-                'Diamond' => (int) ($tierDistribution['Diamond'] ?? 0),
-            ],
+            'tier_distribution' => $distribution,
             'recent_purchases' => $recentPurchases,
         ]);
     }

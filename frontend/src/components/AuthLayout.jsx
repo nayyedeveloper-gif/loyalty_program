@@ -26,7 +26,7 @@ export default function AuthLayout({ title, subtitle, children, footer }) {
           )}
         </div>
         {children}
-        {footer && <div className="mt-5 text-center text-sm text-[var(--color-muted)]">{footer}</div>}
+        {footer && <div className="type-small mt-5 text-center text-[var(--color-muted)]">{footer}</div>}
       </main>
     </div>
   )

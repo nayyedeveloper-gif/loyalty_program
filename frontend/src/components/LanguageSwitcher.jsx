@@ -1,10 +1,14 @@
 import { useLanguage } from '../context/LanguageContext'
 
-export default function LanguageSwitcher({ variant = 'light' }) {
+export default function LanguageSwitcher({ variant = 'light', compact = false }) {
   const { lang, setLang, t } = useLanguage()
 
   return (
-    <div className={`lang-switch ${variant === 'dark' ? 'lang-switch-dark' : ''}`} role="group" aria-label={t('language')}>
+    <div
+      className={`lang-switch ${variant === 'dark' ? 'lang-switch-dark' : ''} ${compact ? 'is-compact' : ''}`}
+      role="group"
+      aria-label={t('language')}
+    >
       <button
         type="button"
         className={lang === 'en' ? 'active' : ''}
@@ -19,7 +23,7 @@ export default function LanguageSwitcher({ variant = 'light' }) {
         onClick={() => setLang('my')}
         aria-pressed={lang === 'my'}
       >
-        မြန်မာ
+        {compact ? 'MY' : 'မြန်မာ'}
       </button>
     </div>
   )

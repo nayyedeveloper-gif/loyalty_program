@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { useLanguage } from '../../context/LanguageContext'
 import api, { formatMMK, getErrorMessage } from '../../lib/api'
-import { faCrown, faGem } from '../../lib/icons'
+import { faCrown, faGem, faTrophy } from '../../lib/icons'
 
 export default function CustomerMembership() {
   const { t } = useLanguage()
@@ -26,6 +27,7 @@ export default function CustomerMembership() {
   }
 
   const next = membership.next_tier
+  const settings = membership.settings || {}
 
   return (
     <div className="space-y-6 w-full">
@@ -39,48 +41,73 @@ export default function CustomerMembership() {
         </div>
       </header>
 
-      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+      <div className="stat-grid auto-fit">
         <section className="stat-card">
-          <div className="text-xs uppercase tracking-[0.18em] text-[var(--color-muted)]">{t('customerId')}</div>
-          <div className="mt-2 text-2xl font-semibold tracking-wide">{membership.customer_code || '—'}</div>
+          <div className="meta-label">{t('customerId')}</div>
+          <div className="stat-value mt-2 tracking-wide">{membership.customer_code || '—'}</div>
+          <div className="type-meta mt-2 text-[var(--color-muted)]">
+            {t('referralCode')}: <strong>{membership.referral_code || '—'}</strong>
+          </div>
         </section>
 
         <section className="stat-card overflow-hidden relative">
           <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.28),transparent_55%)]" />
           <div className="relative">
-            <div className="text-xs uppercase tracking-[0.18em] text-[var(--color-muted)]">{t('currentTier')}</div>
+            <div className="meta-label">{t('currentTier')}</div>
             <div className="mt-2 flex flex-wrap items-end gap-3">
-              <span className={`tier-pill tier-${membership.tier} text-base px-3 py-1`}>{t(membership.tier)}</span>
-              <span className="text-sm text-[var(--color-muted)]">
-                {t('memberDiscount', { percent: membership.discount_percent })}
+              <span className={`tier-pill tier-${membership.tier} px-3 py-1`}>{t(membership.tier)}</span>
+              <span className="type-small text-[var(--color-muted)]">
+                {t('earnMultiplier', { multiplier: membership.earn_multiplier })}
               </span>
             </div>
           </div>
         </section>
 
         <section className="stat-card">
-          <div className="text-xs text-[var(--color-muted)] uppercase tracking-wider flex items-center gap-2">
-            <FontAwesomeIcon icon={faGem} /> {t('points')}
+          <div className="meta-label flex items-center gap-2">
+            <FontAwesomeIcon icon={faGem} /> {t('redeemablePoints')}
           </div>
-          <div className="mt-2 text-2xl font-semibold">{membership.points.toLocaleString()}</div>
+          <div className="stat-value mt-2">{Number(membership.redeemable_points || 0).toLocaleString()}</div>
+          <div className="type-meta mt-1 text-[var(--color-muted)]">
+            {t('pointsExpireHint', { date: membership.points_expire_at ? new Date(membership.points_expire_at).toLocaleDateString() : '—' })}
+          </div>
         </section>
 
         <section className="stat-card">
-          <div className="text-xs text-[var(--color-muted)] uppercase tracking-wider">{t('totalSpent')}</div>
-          <div className="mt-2 text-2xl font-semibold">{formatMMK(membership.total_spent)}</div>
+          <div className="meta-label flex items-center gap-2">
+            <FontAwesomeIcon icon={faTrophy} /> {t('tierPoints365')}
+          </div>
+          <div className="stat-value mt-2">{Number(membership.tier_points_365d || 0).toLocaleString()}</div>
+          <div className="type-meta mt-1 text-[var(--color-muted)]">{t('tierPointsHint')}</div>
+        </section>
+      </div>
+
+      <div className="stat-grid auto-fit">
+        <section className="stat-card">
+          <div className="meta-label">{t('totalSpent')}</div>
+          <div className="stat-value mt-2">{formatMMK(membership.total_spent)}</div>
+        </section>
+        <section className="stat-card">
+          <div className="meta-label">{t('loginStreak')}</div>
+          <div className="stat-value mt-2">{membership.login_streak || 0}</div>
+        </section>
+        <section className="stat-card">
+          <div className="meta-label">{t('earnRule')}</div>
+          <div className="type-small mt-2 text-[var(--color-muted)]">
+            {t('earnRuleCopy', { divisor: settings.base_earn_divisor || 10000 })}
+          </div>
         </section>
       </div>
 
       {next ? (
         <section className="stat-card">
-          <h2 className="text-lg font-semibold m-0">
+          <h2 className="section-heading">
             {t('progressTo', { tier: t(next.name) })}
           </h2>
-          <p className="text-sm text-[var(--color-muted)] mt-1">
-            {t('spendMore', {
-              amount: formatMMK(next.remaining),
+          <p className="type-small text-[var(--color-muted)] mt-1">
+            {t('earnMoreTierPoints', {
+              points: Number(next.remaining || 0).toLocaleString(),
               tier: t(next.name),
-              discount: membership.tiers[next.name].discount,
             })}
           </p>
           <div
@@ -93,28 +120,38 @@ export default function CustomerMembership() {
           >
             <div className="progress-fill" style={{ width: `${next.progress}%` }} />
           </div>
-          <div className="mt-2 text-xs text-[var(--color-muted)]">
+          <div className="type-meta mt-2 text-[var(--color-muted)]">
             {t('progressPercent', { percent: next.progress })}
           </div>
         </section>
       ) : (
         <section className="stat-card">
-          <h2 className="text-lg font-semibold m-0 flex items-center gap-2">
+          <h2 className="section-heading flex items-center gap-2">
             <FontAwesomeIcon icon={faGem} className="text-[var(--color-primary)]" />
             {t('diamondStatus')}
           </h2>
-          <p className="text-sm text-[var(--color-muted)] mt-1">{t('highestTier')}</p>
+          <p className="type-small text-[var(--color-muted)] mt-1">{t('highestTier')}</p>
         </section>
       )}
 
       <section className="stat-card">
-        <h2 className="text-lg font-semibold mb-3">{t('tierBenefits')}</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <h2 className="section-heading">{t('tierBenefits')}</h2>
+          <div className="toolbar-row">
+            <Link to="/app/rewards" className="btn btn-ghost">{t('rewardsCatalog')}</Link>
+            <Link to="/app/missions" className="btn btn-ghost">{t('missions')}</Link>
+            <Link to="/app/points" className="btn btn-ghost">{t('redemptionHistory')}</Link>
+          </div>
+        </div>
         <div className="space-y-2">
-          {Object.entries(membership.tiers).map(([name, cfg]) => (
-            <div key={name} className="flex items-center justify-between gap-3 border-b border-[var(--color-line)] py-2">
+          {Object.entries(membership.tiers || {}).map(([name, cfg]) => (
+            <div key={name} className="tier-perk-row flex flex-wrap items-center justify-between gap-2 border-b border-[var(--color-line)] py-2">
               <span className={`tier-pill tier-${name}`}>{t(name)}</span>
-              <span className="text-sm text-[var(--color-muted)] text-right">
-                {t('fromSpend', { amount: formatMMK(cfg.min), discount: cfg.discount })}
+              <span className="type-small text-[var(--color-muted)]">
+                {t('tierPerkLine', {
+                  points: Number(cfg.min || 0).toLocaleString(),
+                  multiplier: cfg.multiplier,
+                })}
               </span>
             </div>
           ))}

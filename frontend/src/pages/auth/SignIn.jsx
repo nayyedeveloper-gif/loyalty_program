@@ -62,7 +62,7 @@ export default function SignIn() {
             <label htmlFor="password">
               <FontAwesomeIcon icon={faLock} className="field-icon" aria-hidden="true" /> {t('password')}
             </label>
-            <Link to="/forgot-password" className="text-xs text-[var(--color-gold-deep)]">
+            <Link to="/forgot-password" className="type-meta text-[var(--color-gold-deep)]">
               {t('forgotPassword')}
             </Link>
           </div>

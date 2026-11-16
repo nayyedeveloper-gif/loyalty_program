@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Services\TierService;
+use App\Services\PointsEngine;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -49,12 +49,13 @@ class CustomerController extends Controller
         $customer = User::create([
             ...$data,
             'role' => 'customer',
-            'tier' => 'Silver',
+            'tier' => 'Bronze',
         ]);
+        PointsEngine::ensureReferralCode($customer);
 
         return response()->json([
             'message' => 'Customer created.',
-            'customer' => $customer,
+            'customer' => $customer->fresh(),
         ], 201);
     }
 
@@ -84,7 +85,7 @@ class CustomerController extends Controller
         }
 
         $customer->update($data);
-        TierService::syncUser($customer->fresh());
+        PointsEngine::refreshUserBalances($customer->fresh(), touchActivity: false);
 
         return response()->json([
             'message' => 'Customer updated.',

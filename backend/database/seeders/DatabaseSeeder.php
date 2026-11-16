@@ -4,7 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Purchase;
 use App\Models\User;
-use App\Services\TierService;
+use App\Services\PointsEngine;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 
@@ -63,7 +63,6 @@ class DatabaseSeeder extends Seeder
         $payments = ['Cash', 'Bank', 'KPay', 'WavePay', 'Visa/Master'];
         $amountPool = [350_000, 480_000, 650_000, 800_000, 1_000_000, 1_250_000, 1_800_000, 2_400_000, 3_200_000, 4_500_000];
 
-        // Keep a stable demo customer for login testing.
         $this->seedCustomerPurchases(
             User::create([
                 'name' => 'Demo Customer',
@@ -74,7 +73,9 @@ class DatabaseSeeder extends Seeder
                 'password' => 'password123',
                 'total_spent' => 0,
                 'points' => 0,
-                'tier' => 'Silver',
+                'redeemable_points' => 0,
+                'tier' => 'Bronze',
+                'last_activity_at' => now(),
             ]),
             16_000_000,
             $products,
@@ -94,12 +95,12 @@ class DatabaseSeeder extends Seeder
             $email = sprintf('member%03d@29gold.test', $i);
             $address = $townships[$i % count($townships)].', Myanmar';
 
-            // Spread spend targets across tiers.
+            // Spend targets still shape purchase volume; tier now comes from points window.
             $spentTarget = match (true) {
-                $i <= 45 => random_int(80_000, 950_000),          // Silver
-                $i <= 75 => random_int(1_050_000, 4_800_000),      // Gold
-                $i <= 92 => random_int(5_100_000, 14_500_000),     // Platinum
-                default => random_int(15_200_000, 28_000_000),     // Diamond
+                $i <= 45 => random_int(80_000, 950_000),
+                $i <= 75 => random_int(1_050_000, 4_800_000),
+                $i <= 92 => random_int(5_100_000, 14_500_000),
+                default => random_int(15_200_000, 28_000_000),
             };
 
             $customer = User::create([
@@ -111,9 +112,11 @@ class DatabaseSeeder extends Seeder
                 'password' => 'password123',
                 'total_spent' => 0,
                 'points' => 0,
-                'tier' => 'Silver',
+                'redeemable_points' => 0,
+                'tier' => 'Bronze',
                 'created_at' => Carbon::now()->subDays(random_int(1, 240)),
                 'updated_at' => Carbon::now()->subDays(random_int(0, 30)),
+                'last_activity_at' => Carbon::now()->subDays(random_int(0, 30)),
             ]);
 
             $this->seedCustomerPurchases(
@@ -133,6 +136,8 @@ class DatabaseSeeder extends Seeder
         array $payments,
         array $amountPool,
     ): void {
+        PointsEngine::ensureReferralCode($user);
+
         $remaining = $targetSpend;
         $i = 0;
 
@@ -144,32 +149,50 @@ class DatabaseSeeder extends Seeder
 
             $product = $products[($i + $user->id) % count($products)];
             $payment = $payments[($i + $user->id) % count($payments)];
-            $discount = TierService::discountForTier(TierService::tierForSpend((int) $user->total_spent));
-            $net = (int) round($amount * (100 - $discount) / 100);
-            $points = TierService::pointsFromAmount($net);
+            $user->refresh();
+            $earn = PointsEngine::computePurchaseEarn($user, $amount, $product[2]);
 
             $createdAt = Carbon::now()
                 ->subDays(random_int(0, 200))
                 ->subHours(random_int(0, 20))
                 ->subMinutes(random_int(0, 59));
 
-            Purchase::create([
+            $purchase = Purchase::create([
                 'user_id' => $user->id,
                 'product_name' => $product[0],
                 'product_code' => $product[1].'-'.str_pad((string) (($user->id * 10) + $i), 4, '0', STR_PAD_LEFT),
                 'product_type' => $product[2],
                 'amount' => $amount,
-                'discount_percent' => $discount,
-                'net_amount' => $net,
-                'points_earned' => $points,
+                'discount_percent' => 0,
+                'net_amount' => $amount,
+                'points_earned' => $earn['points'],
+                'points_redeemed' => 0,
+                'amount_offset_mmk' => 0,
                 'payment_method' => $payment,
                 'created_at' => $createdAt,
                 'updated_at' => $createdAt,
             ]);
 
-            $user->total_spent += $net;
-            $user->points += $points;
-            $user->tier = TierService::tierForSpend((int) $user->total_spent);
+            $user->total_spent += $amount;
+            $user->save();
+
+            PointsEngine::writeLedger(
+                user: $user,
+                type: 'earn',
+                source: 'purchase',
+                points: $earn['points'],
+                tierEligible: true,
+                purchaseId: $purchase->id,
+                meta: [
+                    'base_points' => $earn['base_points'],
+                    'tier_multiplier' => $earn['tier_multiplier'],
+                    'promo_multiplier' => $earn['promo_multiplier'],
+                    'seeded' => true,
+                ],
+                createdAt: $createdAt,
+            );
+            PointsEngine::refreshUserBalances($user->fresh(), touchActivity: false);
+            $user->last_activity_at = $createdAt;
             $user->save();
 
             $remaining -= $amount;
@@ -179,5 +202,7 @@ class DatabaseSeeder extends Seeder
                 break;
             }
         }
+
+        PointsEngine::refreshUserBalances($user->fresh(), touchActivity: false);
     }
 }

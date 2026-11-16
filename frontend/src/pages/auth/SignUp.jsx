@@ -17,6 +17,7 @@ export default function SignUp() {
     phone: '',
     password: '',
     password_confirmation: '',
+    referral_code: '',
   })
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -91,6 +92,16 @@ export default function SignUp() {
             placeholder="09xxxxxxxxx"
             value={form.phone}
             onChange={(e) => set('phone', e.target.value)}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="referral_code">{t('referralCodeOptional')}</label>
+          <input
+            id="referral_code"
+            autoComplete="off"
+            value={form.referral_code}
+            onChange={(e) => set('referral_code', e.target.value.toUpperCase())}
+            placeholder="RXXXXXXXX"
           />
         </div>
         <div className="field">

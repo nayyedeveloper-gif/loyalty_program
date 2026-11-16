@@ -2,63 +2,78 @@
 
 namespace App\Services;
 
+use App\Models\LoyaltyTier;
 use App\Models\User;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 
 class TierService
 {
-    public const TIERS = [
-        'Silver' => ['min' => 0, 'discount' => 0],
-        'Gold' => ['min' => 1_000_000, 'discount' => 2],
-        'Platinum' => ['min' => 5_000_000, 'discount' => 5],
-        'Diamond' => ['min' => 15_000_000, 'discount' => 8],
-    ];
-
-    public static function pointsFromAmount(int $netAmount): int
+    public static function tiers(): Collection
     {
-        return intdiv($netAmount, 1000);
+        return Cache::remember('loyalty_tiers_ordered', 60, function () {
+            return LoyaltyTier::ordered();
+        });
     }
 
-    public static function tierForSpend(int $totalSpent): string
+    public static function tiersMap(): array
     {
-        $tier = 'Silver';
+        $map = [];
+        foreach (self::tiers() as $tier) {
+            $map[$tier->name] = [
+                'min' => (int) $tier->min_tier_points,
+                'multiplier' => (float) $tier->earn_multiplier,
+                'perks' => $tier->perks ?? [],
+                'sort_order' => (int) $tier->sort_order,
+            ];
+        }
 
-        foreach (self::TIERS as $name => $config) {
-            if ($totalSpent >= $config['min']) {
-                $tier = $name;
+        return $map;
+    }
+
+    public static function tierForPoints(int $tierPoints365d): string
+    {
+        $tier = 'Bronze';
+        foreach (self::tiers() as $row) {
+            if ($tierPoints365d >= (int) $row->min_tier_points) {
+                $tier = $row->name;
             }
         }
 
         return $tier;
     }
 
-    public static function discountForTier(string $tier): int
+    public static function multiplierForTier(string $tier): float
     {
-        return self::TIERS[$tier]['discount'] ?? 0;
+        $map = self::tiersMap();
+
+        return (float) ($map[$tier]['multiplier'] ?? 1.0);
     }
 
     public static function nextTier(User $user): ?array
     {
-        $order = array_keys(self::TIERS);
-        $index = array_search($user->tier, $order, true);
-
-        if ($index === false || $index >= count($order) - 1) {
+        $ordered = self::tiers()->values();
+        $index = $ordered->search(fn ($row) => $row->name === $user->tier);
+        if ($index === false || $index >= $ordered->count() - 1) {
             return null;
         }
 
-        $next = $order[$index + 1];
-        $min = self::TIERS[$next]['min'];
+        $next = $ordered[$index + 1];
+        $currentPoints = (int) $user->tier_points_365d;
+        $min = (int) $next->min_tier_points;
 
         return [
-            'name' => $next,
-            'min_spend' => $min,
-            'remaining' => max(0, $min - $user->total_spent),
-            'progress' => min(100, round(($user->total_spent / $min) * 100, 1)),
+            'name' => $next->name,
+            'min_points' => $min,
+            'remaining' => max(0, $min - $currentPoints),
+            'progress' => $min > 0 ? min(100, round(($currentPoints / $min) * 100, 1)) : 100,
+            'multiplier' => (float) $next->earn_multiplier,
         ];
     }
 
-    public static function syncUser(User $user): void
+    /** @deprecated Auto discounts removed — kept for temporary API compat */
+    public static function discountForTier(string $tier): int
     {
-        $user->tier = self::tierForSpend((int) $user->total_spent);
-        $user->save();
+        return 0;
     }
 }

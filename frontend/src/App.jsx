@@ -11,46 +11,40 @@ import AdminCustomers from './pages/admin/Customers'
 import AdminPurchases from './pages/admin/Purchases'
 import CustomerMembership from './pages/customer/Membership'
 import CustomerHistory from './pages/customer/History'
-import CustomerProfile from './pages/customer/Profile'
+import PointsActivity from './pages/customer/PointsActivity'
+import CustomerRewards from './pages/customer/Rewards'
+import CustomerMissions from './pages/customer/Missions'
+import CustomerReviews from './pages/customer/Reviews'
+import CustomerCommunity from './pages/customer/Community'
 import Settings from './pages/Settings'
+import HelpFeedback from './pages/HelpFeedback'
 import {
+  faBoxOpen,
   faChartLine,
   faCrown,
   faGear,
+  faGem,
   faReceipt,
-  faUser,
+  faShoppingBag,
+  faTrophy,
   faUsers,
-  faBoxOpen,
 } from './lib/icons'
 
 const adminLinks = [
   { to: '/admin', labelKey: 'dashboard', end: true, icon: faChartLine },
   { to: '/admin/customers', labelKey: 'customers', icon: faUsers },
   { to: '/admin/purchases', labelKey: 'purchases', icon: faBoxOpen },
-  {
-    to: '/admin/settings',
-    labelKey: 'settings',
-    icon: faGear,
-    children: [
-      { to: '/admin/settings/general', labelKey: 'general', icon: faGear },
-      { to: '/admin/settings/profile', labelKey: 'profile', icon: faUser },
-    ],
-  },
+  { to: '/admin/settings/general', labelKey: 'settings', icon: faGear },
 ]
 
 const customerLinks = [
   { to: '/app', labelKey: 'membership', end: true, icon: faCrown },
   { to: '/app/history', labelKey: 'purchaseHistory', icon: faReceipt },
-  { to: '/app/profile', labelKey: 'profile', icon: faUser },
-  {
-    to: '/app/settings',
-    labelKey: 'settings',
-    icon: faGear,
-    children: [
-      { to: '/app/settings/general', labelKey: 'general', icon: faGear },
-      { to: '/app/settings/profile', labelKey: 'profile', icon: faUser },
-    ],
-  },
+  { to: '/app/points', labelKey: 'redemptionHistory', icon: faGem },
+  { to: '/app/rewards', labelKey: 'rewardsCatalog', icon: faShoppingBag },
+  { to: '/app/missions', labelKey: 'missions', icon: faTrophy },
+  { to: '/app/reviews', labelKey: 'reviews', icon: faGem },
+  { to: '/app/community', labelKey: 'communityHub', icon: faUsers },
 ]
 
 export default function App() {
@@ -70,6 +64,7 @@ export default function App() {
             <Route path="/admin/purchases" element={<AdminPurchases />} />
             <Route path="/admin/settings" element={<Navigate to="/admin/settings/general" replace />} />
             <Route path="/admin/settings/:section" element={<Settings />} />
+            <Route path="/admin/help" element={<HelpFeedback />} />
           </Route>
         </Route>
 
@@ -77,9 +72,15 @@ export default function App() {
           <Route element={<PanelLayout titleKey="memberApp" links={customerLinks} />}>
             <Route path="/app" element={<CustomerMembership />} />
             <Route path="/app/history" element={<CustomerHistory />} />
-            <Route path="/app/profile" element={<CustomerProfile />} />
+            <Route path="/app/points" element={<PointsActivity />} />
+            <Route path="/app/rewards" element={<CustomerRewards />} />
+            <Route path="/app/missions" element={<CustomerMissions />} />
+            <Route path="/app/reviews" element={<CustomerReviews />} />
+            <Route path="/app/community" element={<CustomerCommunity />} />
+            <Route path="/app/profile" element={<Navigate to="/app/settings/profile" replace />} />
             <Route path="/app/settings" element={<Navigate to="/app/settings/general" replace />} />
             <Route path="/app/settings/:section" element={<Settings />} />
+            <Route path="/app/help" element={<HelpFeedback />} />
           </Route>
         </Route>
 

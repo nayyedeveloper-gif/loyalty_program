@@ -3,10 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Mail\OtpMail;
+use App\Models\LoyaltySetting;
 use App\Models\PasswordOtp;
 use App\Models\User;
+use App\Services\MissionService;
+use App\Services\PointsEngine;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rules\Password;
@@ -21,22 +25,54 @@ class AuthController extends Controller
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'phone' => ['required', 'string', 'max:30', 'unique:users,phone'],
             'password' => ['required', 'confirmed', Password::min(8)],
+            'referral_code' => ['nullable', 'string', 'max:32'],
         ]);
 
-        $user = User::create([
-            'name' => $data['name'],
-            'email' => $data['email'],
-            'phone' => $data['phone'],
-            'password' => $data['password'],
-            'role' => 'customer',
-            'tier' => 'Silver',
-        ]);
+        $user = DB::transaction(function () use ($data) {
+            $referrer = null;
+            if (! empty($data['referral_code'])) {
+                $referrer = User::where('role', 'customer')
+                    ->where('referral_code', strtoupper(trim($data['referral_code'])))
+                    ->first();
+            }
+
+            $user = User::create([
+                'name' => $data['name'],
+                'email' => $data['email'],
+                'phone' => $data['phone'],
+                'password' => $data['password'],
+                'role' => 'customer',
+                'tier' => 'Bronze',
+                'referred_by' => $referrer?->id,
+                'last_activity_at' => now(),
+            ]);
+
+            PointsEngine::ensureReferralCode($user);
+
+            $signupBonus = LoyaltySetting::getInt('signup_bonus_points', 100);
+            if ($signupBonus > 0) {
+                PointsEngine::creditBonus($user, $signupBonus, 'signup', [
+                    'reason' => 'membership_join',
+                ]);
+            }
+
+            if ($referrer) {
+                $referralBonus = LoyaltySetting::getInt('referral_bonus_points', 100);
+                if ($referralBonus > 0) {
+                    PointsEngine::creditBonus($referrer, $referralBonus, 'referral', [
+                        'referred_user_id' => $user->id,
+                    ]);
+                }
+            }
+
+            return $user->fresh();
+        });
 
         $token = $user->createToken('auth')->plainTextToken;
 
         return response()->json([
             'message' => 'Account created successfully.',
-            'user' => $user->fresh(),
+            'user' => $user,
             'token' => $token,
         ], 201);
     }
@@ -56,11 +92,30 @@ class AuthController extends Controller
             ]);
         }
 
+        if ($user->isCustomer()) {
+            $today = now()->toDateString();
+            $yesterday = now()->subDay()->toDateString();
+            $last = optional($user->last_login_streak_date)?->toDateString();
+
+            if ($last === $today) {
+                // already counted today
+            } elseif ($last === $yesterday) {
+                $user->login_streak = ((int) $user->login_streak) + 1;
+                $user->last_login_streak_date = $today;
+            } else {
+                $user->login_streak = 1;
+                $user->last_login_streak_date = $today;
+            }
+            $user->save();
+
+            MissionService::recordLogin($user);
+        }
+
         $token = $user->createToken('auth')->plainTextToken;
 
         return response()->json([
             'message' => 'Signed in successfully.',
-            'user' => $user,
+            'user' => $user->fresh(),
             'token' => $token,
         ]);
     }

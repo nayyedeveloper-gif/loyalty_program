@@ -15,10 +15,11 @@ import {
 } from '../lib/icons'
 
 const TIERS = [
-  { key: 'Silver', min: '0', discount: '0%', descKey: 'silverDesc', className: 'tier-Silver' },
-  { key: 'Gold', min: '1,000,000', discount: '2%', descKey: 'goldDesc', className: 'tier-Gold' },
-  { key: 'Platinum', min: '5,000,000', discount: '5%', descKey: 'platinumDesc', className: 'tier-Platinum' },
-  { key: 'Diamond', min: '15,000,000', discount: '8%', descKey: 'diamondDesc', className: 'tier-Diamond' },
+  { key: 'Bronze', points: '0', multiplier: '1.0x', descKey: 'bronzeDesc', className: 'tier-Bronze' },
+  { key: 'Silver', points: '500', multiplier: '1.2x', descKey: 'silverDesc', className: 'tier-Silver' },
+  { key: 'Gold', points: '2,000', multiplier: '1.5x', descKey: 'goldDesc', className: 'tier-Gold' },
+  { key: 'Platinum', points: '6,000', multiplier: '2.0x', descKey: 'platinumDesc', className: 'tier-Platinum' },
+  { key: 'Diamond', points: '15,000', multiplier: '2.5x', descKey: 'diamondDesc', className: 'tier-Diamond' },
 ]
 
 export default function Landing() {
@@ -117,12 +118,12 @@ export default function Landing() {
                 <span className={`tier-pill ${tier.className}`}>{t(tier.key)}</span>
                 <div className="tier-meta">
                   <div>
-                    <span className="tier-meta-label">{t('minSpend')}</span>
-                    <strong>{tier.min} MMK</strong>
+                    <span className="tier-meta-label">{t('minTierPoints')}</span>
+                    <strong>{tier.points}</strong>
                   </div>
                   <div>
-                    <span className="tier-meta-label">{t('discountLabel')}</span>
-                    <strong>{tier.discount}</strong>
+                    <span className="tier-meta-label">{t('multiplierLabel')}</span>
+                    <strong>{tier.multiplier}</strong>
                   </div>
                 </div>
                 <p>{t(tier.descKey)}</p>

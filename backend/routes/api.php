@@ -42,5 +42,11 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
 Route::middleware(['auth:sanctum', 'customer'])->prefix('customer')->group(function () {
     Route::get('/membership', [MembershipController::class, 'status']);
     Route::get('/purchases', [MembershipController::class, 'purchases']);
+    Route::get('/ledger', [MembershipController::class, 'ledger']);
+    Route::get('/rewards', [MembershipController::class, 'rewards']);
+    Route::post('/rewards/redeem', [MembershipController::class, 'redeemReward']);
+    Route::get('/missions', [MembershipController::class, 'missions']);
+    Route::get('/reviews', [MembershipController::class, 'reviews']);
+    Route::post('/reviews', [MembershipController::class, 'storeReview']);
     Route::put('/profile', [MembershipController::class, 'profile']);
 });
