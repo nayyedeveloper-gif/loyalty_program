@@ -100,6 +100,7 @@ Route::prefix('spinwheel')->group(function () {
         Route::put('/segments/{segment}', [WheelController::class, 'updateSegment']);
         Route::post('/segments/{segment}', [WheelController::class, 'updateSegment']);
         Route::delete('/segments/{segment}', [WheelController::class, 'destroySegment']);
+        Route::get('/stock-alerts', [WheelController::class, 'stockAlerts']);
 
         Route::get('/usages', [SpinController::class, 'usageIndex']);
         Route::post('/usages/grant', [SpinController::class, 'grant']);

@@ -5,8 +5,7 @@ import '../../styles/spinwheel.css'
 
 const defaultSettings = {
   grant_on_registration: 0,
-  login_promo_active: false,
-  grant_on_login_promo: 0,
+  registration_grant_message: 'Welcome! You received {count} free spin(s). Open Spinwheel to try your luck.',
   default_valid_hours: 24,
 }
 
@@ -145,10 +144,8 @@ export default function AdminSpinUsage() {
     setError('')
     try {
       const payload = {
-        ...settings,
-        login_promo_active: !!settings.login_promo_active,
         grant_on_registration: Number(settings.grant_on_registration),
-        grant_on_login_promo: Number(settings.grant_on_login_promo),
+        registration_grant_message: settings.registration_grant_message || '',
         default_valid_hours: Number(settings.default_valid_hours),
       }
       const { data } = await api.put('/spinwheel/admin/settings', payload)
@@ -326,7 +323,7 @@ export default function AdminSpinUsage() {
         <form className="admin-card" onSubmit={saveSettings}>
           <h2 style={{ margin: '0 0 0.35rem', fontSize: '1.05rem' }}>Automatic grants</h2>
           <p className="admin-muted" style={{ marginTop: 0 }}>
-            Background rules for registration and login. Separate from promo popups on Spinwheel.
+            Give welcome spins when a member registers. They see your message after signup/login. Promo popups stay in Promo sessions.
           </p>
           <label className="admin-label">Spins on registration</label>
           <input
@@ -337,22 +334,13 @@ export default function AdminSpinUsage() {
             value={settings.grant_on_registration}
             onChange={(e) => setSettings({ ...settings, grant_on_registration: e.target.value })}
           />
-          <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, fontSize: '0.9rem' }}>
-            <input
-              type="checkbox"
-              checked={!!settings.login_promo_active}
-              onChange={(e) => setSettings({ ...settings, login_promo_active: e.target.checked })}
-            />
-            Login promotion active
-          </label>
-          <label className="admin-label">Spins on promo login</label>
-          <input
-            className="admin-input"
-            type="number"
-            min={0}
-            max={50}
-            value={settings.grant_on_login_promo}
-            onChange={(e) => setSettings({ ...settings, grant_on_login_promo: e.target.value })}
+          <label className="admin-label">Welcome message (use {'{count}'} for spin count)</label>
+          <textarea
+            className="admin-textarea"
+            rows={3}
+            value={settings.registration_grant_message}
+            onChange={(e) => setSettings({ ...settings, registration_grant_message: e.target.value })}
+            placeholder="Welcome! You received {count} free spin(s)."
           />
           <label className="admin-label">Default validity (hours)</label>
           <input

@@ -157,6 +157,34 @@ class WheelController extends Controller
         return $segment->load('wheel');
     }
 
+    public function stockAlerts()
+    {
+        $items = WheelSegment::query()
+            ->with('wheel:id,name,status')
+            ->whereNotNull('stock')
+            ->where('stock', '<=', 0)
+            ->orderByDesc('stock_depleted_at')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (WheelSegment $s) => [
+                'id' => $s->id,
+                'prize_label' => $s->prize_label,
+                'display_label' => $s->display_label,
+                'wheel_id' => $s->wheel_id,
+                'wheel_name' => $s->wheel?->name,
+                'is_active' => $s->is_active,
+                'stock' => $s->stock,
+                'stock_depleted_at' => $s->stock_depleted_at,
+            ])
+            ->values();
+
+        return [
+            'count' => $items->count(),
+            'has_alerts' => $items->isNotEmpty(),
+            'items' => $items,
+        ];
+    }
+
     public function storeSegment(Request $request, Wheel $wheel)
     {
         $data = $this->segmentPayload($request, true);
@@ -166,6 +194,19 @@ class WheelController extends Controller
         $data['requires_claim'] = array_key_exists('requires_claim', $data)
             ? filter_var($data['requires_claim'], FILTER_VALIDATE_BOOLEAN)
             : true;
+
+        if (array_key_exists('stock', $data)) {
+            if ($data['stock'] === '' || $data['stock'] === null) {
+                $data['stock'] = null;
+            } else {
+                $data['stock'] = (int) $data['stock'];
+                if ($data['stock'] <= 0) {
+                    $data['stock'] = 0;
+                    $data['is_active'] = false;
+                    $data['stock_depleted_at'] = now();
+                }
+            }
+        }
 
         if ($request->hasFile('image')) {
             $data['image_path'] = $request->file('image')->store('spinwheel/prizes', 'public');
@@ -217,6 +258,25 @@ class WheelController extends Controller
 
         if (array_key_exists('claim_days', $data) && ($data['claim_days'] === '' || $data['claim_days'] === null)) {
             $data['claim_days'] = null;
+        }
+
+        if (array_key_exists('stock', $data)) {
+            if ($data['stock'] === '' || $data['stock'] === null) {
+                $data['stock'] = null;
+                $data['stock_depleted_at'] = null;
+            } else {
+                $data['stock'] = (int) $data['stock'];
+                if ($data['stock'] > 0) {
+                    $data['stock_depleted_at'] = null;
+                    // Restocking an empty prize re-activates it unless admin explicitly keeps it off
+                    if (! array_key_exists('is_active', $data) && $segment->is_out_of_stock) {
+                        $data['is_active'] = true;
+                    }
+                } elseif ($data['stock'] === 0) {
+                    $data['is_active'] = false;
+                    $data['stock_depleted_at'] = $segment->stock_depleted_at ?: now();
+                }
+            }
         }
 
         $segment->fill($data)->save();
@@ -275,6 +335,10 @@ class WheelController extends Controller
             $request->merge(['claim_days' => null]);
         }
 
+        if ($request->has('stock') && $request->input('stock') === '') {
+            $request->merge(['stock' => null]);
+        }
+
         $rules = [
             'name' => ($creating ? 'required' : 'sometimes').'|string|max:120',
             'prize_label' => ($creating ? 'required' : 'sometimes').'|string|max:120',
@@ -288,6 +352,7 @@ class WheelController extends Controller
             'requires_claim' => 'sometimes',
             'claim_days' => 'nullable|integer|min:1|max:3650',
             'tier' => 'sometimes|in:minor,major',
+            'stock' => 'nullable|integer|min:0|max:100000',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,gif,webp,bmp,svg|max:4096',
             'remove_image' => 'sometimes',
             'sort_order' => 'sometimes|integer|min:0',

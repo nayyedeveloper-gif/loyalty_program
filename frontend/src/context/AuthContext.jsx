@@ -35,11 +35,20 @@ export function AuthProvider({ children }) {
   }, [])
 
   const value = useMemo(() => {
+    function stashSpinGrant(notice) {
+      if (!notice?.message) {
+        sessionStorage.removeItem('spin_grant_notice')
+        return
+      }
+      sessionStorage.setItem('spin_grant_notice', JSON.stringify(notice))
+    }
+
     async function login(payload) {
       const { data } = await api.post('/auth/login', payload)
       localStorage.setItem('token', data.token)
       localStorage.setItem('user', JSON.stringify(data.user))
       setUser(data.user)
+      stashSpinGrant(data.spin_grant)
       return data.user
     }
 
@@ -48,6 +57,7 @@ export function AuthProvider({ children }) {
       localStorage.setItem('token', data.token)
       localStorage.setItem('user', JSON.stringify(data.user))
       setUser(data.user)
+      stashSpinGrant(data.spin_grant)
       return data.user
     }
 

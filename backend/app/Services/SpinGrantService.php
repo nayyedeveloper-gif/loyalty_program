@@ -77,33 +77,72 @@ class SpinGrantService
         return $created;
     }
 
-    public function grantOnRegistration(User $user): Collection
+    /**
+     * @return array{count: int, message: string, source: string, title: string}|null
+     */
+    public function grantOnRegistration(User $user): ?array
     {
         $count = SpinwheelSetting::getInt('grant_on_registration', 0);
+        $created = $this->grant($user, $count, 'registration');
+        if ($created->isEmpty()) {
+            return null;
+        }
 
-        return $this->grant($user, $count, 'registration');
+        $template = SpinwheelSetting::getValue(
+            'registration_grant_message',
+            'Welcome! You received {count} free spin(s). Open Spinwheel to try your luck.'
+        );
+
+        return [
+            'count' => $created->count(),
+            'message' => str_replace(
+                ['{count}', '{spins}', '[count]'],
+                [(string) $created->count(), (string) $created->count(), (string) $created->count()],
+                (string) $template
+            ),
+            'source' => 'registration',
+            'title' => 'Welcome spins',
+        ];
     }
 
-    public function grantOnLoginPromo(User $user): Collection
+    /** Login promo grants removed — kept as no-op for callers. */
+    public function grantOnLoginPromo(User $user): ?array
     {
-        if (! SpinwheelSetting::getBool('login_promo_active', false)) {
-            return collect();
-        }
+        return null;
+    }
 
-        $count = SpinwheelSetting::getInt('grant_on_login_promo', 0);
+    /**
+     * Notice for members who still have fresh registration spins (shown on login / first visit).
+     *
+     * @return array{count: int, message: string, source: string, title: string}|null
+     */
+    public function pendingRegistrationNotice(User $user): ?array
+    {
+        $count = SpinUsage::where('user_id', $user->id)
+            ->where('source', 'registration')
+            ->where('status', 'available')
+            ->where('expires_at', '>', now())
+            ->where('granted_at', '>=', now()->subDay())
+            ->count();
+
         if ($count < 1) {
-            return collect();
+            return null;
         }
 
-        $already = SpinUsage::where('user_id', $user->id)
-            ->where('source', 'login_promo')
-            ->whereDate('granted_at', now()->toDateString())
-            ->exists();
+        $template = SpinwheelSetting::getValue(
+            'registration_grant_message',
+            'Welcome! You received {count} free spin(s). Open Spinwheel to try your luck.'
+        );
 
-        if ($already) {
-            return collect();
-        }
-
-        return $this->grant($user, $count, 'login_promo');
+        return [
+            'count' => $count,
+            'message' => str_replace(
+                ['{count}', '{spins}', '[count]'],
+                [(string) $count, (string) $count, (string) $count],
+                (string) $template
+            ),
+            'source' => 'registration',
+            'title' => 'Welcome spins',
+        ];
     }
 }

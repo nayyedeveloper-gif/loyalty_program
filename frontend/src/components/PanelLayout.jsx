@@ -7,6 +7,7 @@ import api from '../lib/api'
 import LanguageSwitcher from './LanguageSwitcher'
 import ThemeSwitcher from './ThemeSwitcher'
 import BrandLogo from './BrandLogo'
+import SpinGrantNotice from '../modules/spinwheel/components/SpinGrantNotice'
 import {
   faChevronRight,
   faCircleQuestion,
@@ -50,6 +51,7 @@ export default function PanelLayout({ titleKey, links }) {
   const { user, logout } = useAuth()
   const { t } = useLanguage()
   const [spinPromoPending, setSpinPromoPending] = useState(false)
+  const [stockAlertCount, setStockAlertCount] = useState(0)
   const navigate = useNavigate()
   const location = useLocation()
   const isMobile = useIsMobile()
@@ -147,6 +149,33 @@ export default function PanelLayout({ titleKey, links }) {
       window.removeEventListener('spinwheel:promo-changed', onPromoChanged)
     }
   }, [user?.role, user?.id])
+
+  useEffect(() => {
+    if (user?.role !== 'admin') {
+      setStockAlertCount(0)
+      return undefined
+    }
+
+    let cancelled = false
+    const refresh = async () => {
+      try {
+        const { data } = await api.get('/spinwheel/admin/stock-alerts')
+        if (!cancelled) setStockAlertCount(Number(data?.count) || 0)
+      } catch {
+        if (!cancelled) setStockAlertCount(0)
+      }
+    }
+
+    refresh()
+    const timer = setInterval(refresh, 45000)
+    const onFocus = () => refresh()
+    window.addEventListener('focus', onFocus)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [user?.role, user?.id, location.pathname])
 
   useEffect(() => {
     if (!accountMenuOpen) return undefined
@@ -247,6 +276,7 @@ export default function PanelLayout({ titleKey, links }) {
               const parentActive = linkIsActive(location.pathname, link)
               const expanded = Boolean(openMenus[link.to]) || (collapsed && parentActive)
               const defaultChild = link.children[0]?.to || link.to
+              const showStockBadge = stockAlertCount > 0 && link.to === '/admin/spinwheel'
 
               return (
                 <div key={link.to} className={`sidebar-group ${expanded ? 'is-open' : ''} ${parentActive ? 'is-active' : ''}`}>
@@ -267,6 +297,9 @@ export default function PanelLayout({ titleKey, links }) {
                   >
                     <FontAwesomeIcon icon={link.icon} className="sidebar-link-icon" aria-hidden="true" />
                     <span className="sidebar-link-label">{t(link.labelKey)}</span>
+                    {showStockBadge && (
+                      <span className="sidebar-link-badge" aria-label={`${stockAlertCount} prizes out of stock`} />
+                    )}
                     {showLabels && (
                       <FontAwesomeIcon
                         icon={faChevronRight}
@@ -278,18 +311,24 @@ export default function PanelLayout({ titleKey, links }) {
 
                   {expanded && showLabels && (
                     <div className="sidebar-subnav" role="group" aria-label={t(link.labelKey)}>
-                      {link.children.map((child) => (
-                        <NavLink
-                          key={child.to}
-                          to={child.to}
-                          title={t(child.labelKey)}
-                          onClick={closeMobile}
-                          className={({ isActive }) => `sidebar-link sidebar-sublink ${isActive ? 'active' : ''}`}
-                        >
-                          <FontAwesomeIcon icon={child.icon} className="sidebar-link-icon" aria-hidden="true" />
-                          <span className="sidebar-link-label">{t(child.labelKey)}</span>
-                        </NavLink>
-                      ))}
+                      {link.children.map((child) => {
+                        const childStockBadge = stockAlertCount > 0 && child.to === '/admin/spinwheel/wheel'
+                        return (
+                          <NavLink
+                            key={child.to}
+                            to={child.to}
+                            title={t(child.labelKey)}
+                            onClick={closeMobile}
+                            className={({ isActive }) => `sidebar-link sidebar-sublink ${isActive ? 'active' : ''}`}
+                          >
+                            <FontAwesomeIcon icon={child.icon} className="sidebar-link-icon" aria-hidden="true" />
+                            <span className="sidebar-link-label">{t(child.labelKey)}</span>
+                            {childStockBadge && (
+                              <span className="sidebar-link-badge" aria-label={`${stockAlertCount} prizes out of stock`} />
+                            )}
+                          </NavLink>
+                        )
+                      })}
                     </div>
                   )}
                 </div>
@@ -404,6 +443,7 @@ export default function PanelLayout({ titleKey, links }) {
           </div>
         </header>
         <main id="main-content" className="panel-content" tabIndex={-1}>
+          {user?.role === 'customer' && <SpinGrantNotice />}
           <Outlet />
         </main>
       </div>

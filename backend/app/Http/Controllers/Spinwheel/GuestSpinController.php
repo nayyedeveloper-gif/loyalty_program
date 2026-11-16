@@ -339,9 +339,21 @@ class GuestSpinController extends Controller
                 return response()->json(['message' => 'No active wheel'], 422);
             }
 
-            $segment = $this->spins->pickWeighted($wheel->segments);
+            $eligible = $wheel->segments->filter(fn ($s) => $s->hasAvailableStock())->values();
+            $segment = $this->spins->pickWeighted($eligible);
             if (! $segment) {
                 return response()->json(['message' => 'Invalid prize weights'], 422);
+            }
+
+            $lockedSegment = \App\Models\WheelSegment::query()->whereKey($segment->id)->lockForUpdate()->first();
+            if (! $lockedSegment || ! $lockedSegment->is_active || ! $lockedSegment->hasAvailableStock()) {
+                return response()->json(['message' => 'Selected prize is no longer available. Please try again.'], 422);
+            }
+            if (! $lockedSegment->consumeStock()) {
+                return response()->json(['message' => 'Selected prize is out of stock. Please try again.'], 422);
+            }
+            if ($lockedSegment->is_out_of_stock) {
+                $wheel->bumpContentRevision();
             }
 
             $usage = SpinUsage::create([
@@ -358,7 +370,7 @@ class GuestSpinController extends Controller
                 usage: $usage,
                 user: $guestUser,
                 wheel: $wheel,
-                segment: $segment,
+                segment: $lockedSegment->fresh(),
                 idempotencyKey: $data['idempotency_key'],
                 isGuest: true,
                 guestMeta: [
