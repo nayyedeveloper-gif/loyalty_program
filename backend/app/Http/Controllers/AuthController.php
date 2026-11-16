@@ -8,6 +8,7 @@ use App\Models\PasswordOtp;
 use App\Models\User;
 use App\Services\MissionService;
 use App\Services\PointsEngine;
+use App\Services\SpinGrantService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -65,6 +66,8 @@ class AuthController extends Controller
                 }
             }
 
+            app(SpinGrantService::class)->grantOnRegistration($user);
+
             return $user->fresh();
         });
 
@@ -109,6 +112,7 @@ class AuthController extends Controller
             $user->save();
 
             MissionService::recordLogin($user);
+            app(SpinGrantService::class)->grantOnLoginPromo($user);
         }
 
         $token = $user->createToken('auth')->plainTextToken;

@@ -12,6 +12,8 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        $this->call(SpinWheelSeeder::class);
+
         User::create([
             'name' => '29 Admin',
             'email' => 'admin@29gold.com',

@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { useAuth } from '../context/AuthContext'
 import { useLanguage } from '../context/LanguageContext'
+import api from '../lib/api'
 import LanguageSwitcher from './LanguageSwitcher'
 import ThemeSwitcher from './ThemeSwitcher'
 import BrandLogo from './BrandLogo'
@@ -48,6 +49,7 @@ function linkIsActive(pathname, link) {
 export default function PanelLayout({ titleKey, links }) {
   const { user, logout } = useAuth()
   const { t } = useLanguage()
+  const [spinPromoPending, setSpinPromoPending] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
   const isMobile = useIsMobile()
@@ -108,6 +110,43 @@ export default function PanelLayout({ titleKey, links }) {
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [isMobile, mobileOpen])
+
+  useEffect(() => {
+    if (user?.role !== 'customer') {
+      setSpinPromoPending(false)
+      return undefined
+    }
+
+    let cancelled = false
+    const refresh = async () => {
+      try {
+        const { data } = await api.get('/spinwheel/promos/pending')
+        if (!cancelled) setSpinPromoPending(!!data?.has_pending)
+      } catch {
+        if (!cancelled) setSpinPromoPending(false)
+      }
+    }
+
+    refresh()
+    const timer = setInterval(refresh, 60000)
+    const onFocus = () => refresh()
+    const onPromoChanged = (event) => {
+      if (typeof event?.detail?.hasPending === 'boolean') {
+        setSpinPromoPending(event.detail.hasPending)
+      } else {
+        refresh()
+      }
+    }
+
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('spinwheel:promo-changed', onPromoChanged)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('spinwheel:promo-changed', onPromoChanged)
+    }
+  }, [user?.role, user?.id])
 
   useEffect(() => {
     if (!accountMenuOpen) return undefined
@@ -257,6 +296,8 @@ export default function PanelLayout({ titleKey, links }) {
               )
             }
 
+            const showPromoBadge = spinPromoPending && link.to === '/app/spinwheel'
+
             return (
               <NavLink
                 key={link.to}
@@ -268,6 +309,9 @@ export default function PanelLayout({ titleKey, links }) {
               >
                 <FontAwesomeIcon icon={link.icon} className="sidebar-link-icon" aria-hidden="true" />
                 <span className="sidebar-link-label">{t(link.labelKey)}</span>
+                {showPromoBadge && (
+                  <span className="sidebar-link-badge" aria-label="Spin promotion available" />
+                )}
               </NavLink>
             )
           })}

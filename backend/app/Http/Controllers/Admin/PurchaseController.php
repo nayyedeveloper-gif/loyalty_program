@@ -7,6 +7,7 @@ use App\Models\Purchase;
 use App\Models\User;
 use App\Services\MissionService;
 use App\Services\PointsEngine;
+use App\Services\SpinGrantService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -42,7 +43,9 @@ class PurchaseController extends Controller
     {
         $data = $this->validated($request);
 
-        $purchase = DB::transaction(function () use ($data) {
+        $grantSpins = (int) ($data['grant_spins'] ?? 0);
+
+        $purchase = DB::transaction(function () use ($data, $grantSpins, $request) {
             $customer = User::where('role', 'customer')->lockForUpdate()->findOrFail($data['user_id']);
             $amount = (int) $data['amount'];
             $redeemPoints = (int) ($data['points_to_redeem'] ?? 0);
@@ -82,6 +85,15 @@ class PurchaseController extends Controller
             );
 
             MissionService::recordPurchase($customer->fresh(), $payable);
+
+            if ($grantSpins > 0) {
+                app(SpinGrantService::class)->grant(
+                    user: $customer->fresh(),
+                    count: $grantSpins,
+                    source: 'purchase',
+                    actorId: $request->user()?->id,
+                );
+            }
 
             return $purchase->load('user:id,name,email,phone,tier,points,redeemable_points,tier_points_365d,total_spent');
         });
@@ -190,6 +202,7 @@ class PurchaseController extends Controller
             'product_type' => [$required, Rule::in(['Gold', 'Diamond', 'Jade', 'Ruby', 'Silver', 'Watch', 'Other'])],
             'amount' => [$required, 'integer', 'min:1000'],
             'points_to_redeem' => ['nullable', 'integer', 'min:0'],
+            'grant_spins' => ['nullable', 'integer', 'min:0', 'max:50'],
             'payment_method' => [$required, Rule::in(['Cash', 'Bank', 'KPay', 'WavePay', 'Visa/Master'])],
         ]);
     }
