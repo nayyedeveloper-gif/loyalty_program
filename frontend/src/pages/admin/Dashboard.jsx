@@ -4,7 +4,17 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { useAuth } from '../../context/AuthContext'
 import { useLanguage } from '../../context/LanguageContext'
 import api, { formatMMK, getErrorMessage } from '../../lib/api'
-import { faBoxOpen, faChartLine, faCrown, faGem, faReceipt, faUsers } from '../../lib/icons'
+import {
+  faBell,
+  faBoxOpen,
+  faChartLine,
+  faCrown,
+  faEnvelopeOpenText,
+  faGem,
+  faReceipt,
+  faShoppingBag,
+  faUsers,
+} from '../../lib/icons'
 
 export default function AdminDashboard() {
   const { user } = useAuth()
@@ -27,6 +37,29 @@ export default function AdminDashboard() {
       </div>
     )
   }
+
+  const alerts = data.alerts || {}
+  const lowStock = alerts.low_stock_rewards || []
+  const alertItems = [
+    alerts.new_feedback > 0 && {
+      key: 'feedback',
+      to: '/admin/help',
+      icon: faEnvelopeOpenText,
+      label: t('alertNewFeedback', { count: alerts.new_feedback }),
+    },
+    alerts.pending_redemptions > 0 && {
+      key: 'redemptions',
+      to: '/admin/redemptions?status=pending',
+      icon: faReceipt,
+      label: t('alertPendingRedemptions', { count: alerts.pending_redemptions }),
+    },
+    lowStock.length > 0 && {
+      key: 'stock',
+      to: '/admin/rewards',
+      icon: faShoppingBag,
+      label: t('alertLowStock', { count: lowStock.length }),
+    },
+  ].filter(Boolean)
 
   const stats = [
     {
@@ -51,7 +84,7 @@ export default function AdminDashboard() {
       label: t('pointsIssued'),
       value: data.stats.points_issued.toLocaleString(),
       icon: faGem,
-      to: '/admin/purchases',
+      to: '/admin/ledger',
     },
   ]
 
@@ -64,6 +97,36 @@ export default function AdminDashboard() {
         </h1>
         <p>{t('dashboardSubtitle')}</p>
       </section>
+
+      {alertItems.length > 0 && (
+        <section className="stat-card" aria-label={t('dashboardAlerts')}>
+          <h2 className="section-heading mb-3 flex items-center gap-2">
+            <FontAwesomeIcon icon={faBell} className="text-[var(--color-primary)]" />
+            {t('dashboardAlerts')}
+          </h2>
+          <div className="space-y-2">
+            {alertItems.map((item) => (
+              <Link
+                key={item.key}
+                to={item.to}
+                className="list-row-link flex items-center gap-3 no-underline rounded-lg px-2 py-2"
+              >
+                <FontAwesomeIcon icon={item.icon} className="text-[var(--color-primary)]" aria-hidden="true" />
+                <span className="type-small font-medium">{item.label}</span>
+              </Link>
+            ))}
+            {lowStock.length > 0 && (
+              <ul className="m-0 pl-5 type-meta text-[var(--color-muted)]">
+                {lowStock.map((reward) => (
+                  <li key={reward.id}>
+                    {reward.name} — {t('stockLeft', { stock: reward.stock })}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+      )}
 
       <div className="stat-grid">
         {stats.map((stat, i) => (
@@ -82,54 +145,64 @@ export default function AdminDashboard() {
         ))}
       </div>
 
-      <section className="grid gap-5 lg:grid-cols-2">
-        <div className="stat-card">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="section-heading flex items-center gap-2">
-              <FontAwesomeIcon icon={faCrown} className="text-[var(--color-primary)]" />
-              {t('tierDistribution')}
+      <section className="dashboard-split">
+        <div className="stat-card dashboard-panel dashboard-panel-tiers">
+          <div className="dashboard-panel-head">
+            <h2 className="section-heading dashboard-panel-title">
+              <FontAwesomeIcon icon={faCrown} className="text-[var(--color-primary)]" aria-hidden="true" />
+              <span>{t('tierDistribution')}</span>
             </h2>
-            <Link to="/admin/customers" className="type-small text-[var(--color-primary)] font-medium">
+            <Link to="/admin/customers" className="dashboard-panel-link">
               {t('customers')}
             </Link>
           </div>
-          <div className="space-y-3">
+          <div className="dashboard-panel-scroll space-y-1.5">
             {Object.entries(data.tier_distribution).map(([tier, count]) => (
               <Link
                 key={tier}
                 to={`/admin/customers?tier=${encodeURIComponent(tier)}`}
-                className="flex items-center justify-between no-underline text-inherit rounded-lg px-1 py-1 hover:bg-[#f8fafc]"
+                className="list-row-link tier-dist-row"
               >
                 <span className={`tier-pill tier-${tier}`}>{t(tier)}</span>
-                <span className="font-medium">{count} {t('members')}</span>
+                <span className="tier-dist-count">
+                  <strong>{count}</strong>
+                  <span className="tier-dist-count-label">{t('members')}</span>
+                </span>
               </Link>
             ))}
           </div>
         </div>
 
-        <Link to="/admin/purchases" className="stat-card stat-card-link block no-underline text-inherit">
-          <h2 className="section-heading mb-4 flex items-center gap-2">
-            <FontAwesomeIcon icon={faReceipt} className="text-[var(--color-primary)]" />
-            {t('recentPurchases')}
-          </h2>
-          <div className="space-y-3">
+        <div className="stat-card dashboard-panel dashboard-panel-purchases">
+          <div className="dashboard-panel-head">
+            <h2 className="section-heading dashboard-panel-title">
+              <FontAwesomeIcon icon={faReceipt} className="text-[var(--color-primary)]" aria-hidden="true" />
+              <span>{t('recentPurchases')}</span>
+            </h2>
+            <Link to="/admin/purchases" className="dashboard-panel-link">
+              {t('purchases')}
+            </Link>
+          </div>
+          <div className="dashboard-panel-scroll dashboard-panel-scroll-purchases space-y-3">
             {data.recent_purchases.map((p) => (
-              <div key={p.id} className="flex items-start justify-between gap-3 border-b border-[var(--color-line)] pb-3">
-                <div>
-                  <div className="font-medium">{p.product_name}</div>
+              <div key={p.id} className="purchase-row">
+                <div className="purchase-row-copy min-w-0">
+                  <div className="font-medium truncate">{p.product_name}</div>
                   <div className="type-meta text-[var(--color-muted)]">
                     {p.user?.customer_code ? `${p.user.customer_code} · ` : ''}
                     {p.user?.name} · {p.payment_method}
                   </div>
                 </div>
-                <div className="type-small text-right font-semibold">{formatMMK(p.net_amount)}</div>
+                <div className="purchase-row-amount">
+                  {formatMMK(p.net_amount)}
+                </div>
               </div>
             ))}
             {!data.recent_purchases.length && (
               <p className="type-small text-[var(--color-muted)]">{t('noPurchasesYet')}</p>
             )}
           </div>
-        </Link>
+        </div>
       </section>
     </div>
   )

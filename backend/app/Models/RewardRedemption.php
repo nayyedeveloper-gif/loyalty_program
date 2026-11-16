@@ -12,13 +12,16 @@ class RewardRedemption extends Model
         'reward_item_id',
         'ledger_id',
         'points_spent',
+        'redemption_code',
         'status',
+        'collected_at',
     ];
 
     protected function casts(): array
     {
         return [
             'points_spent' => 'integer',
+            'collected_at' => 'datetime',
         ];
     }
 

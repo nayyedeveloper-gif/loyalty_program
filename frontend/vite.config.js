@@ -89,7 +89,8 @@ export default defineConfig({
   ],
   server: {
     port: 5173,
-    host: '127.0.0.1',
+    // 0.0.0.0 so phones on the same Wi‑Fi can hit Vite for live reload.
+    host: '0.0.0.0',
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8000',

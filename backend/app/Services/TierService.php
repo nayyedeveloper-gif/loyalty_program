@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\LoyaltySetting;
 use App\Models\LoyaltyTier;
 use App\Models\User;
 use Illuminate\Support\Collection;
@@ -61,13 +62,21 @@ class TierService
         $next = $ordered[$index + 1];
         $currentPoints = (int) $user->tier_points_365d;
         $min = (int) $next->min_tier_points;
+        $remaining = max(0, $min - $currentPoints);
+        $divisor = max(1, LoyaltySetting::getInt('base_earn_divisor', 10000));
+        $currentMultiplier = max(0.01, self::multiplierForTier($user->tier ?? 'Bronze'));
+        // Approximate payable MMK needed at current earn rate (base × tier, no promo).
+        $estimatedMmk = (int) ceil(($remaining * $divisor) / $currentMultiplier);
 
         return [
             'name' => $next->name,
             'min_points' => $min,
-            'remaining' => max(0, $min - $currentPoints),
+            'remaining' => $remaining,
             'progress' => $min > 0 ? min(100, round(($currentPoints / $min) * 100, 1)) : 100,
             'multiplier' => (float) $next->earn_multiplier,
+            'estimated_spend_mmk' => $estimatedMmk,
+            'earn_divisor' => $divisor,
+            'at_multiplier' => round($currentMultiplier, 2),
         ];
     }
 

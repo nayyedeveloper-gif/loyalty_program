@@ -12,6 +12,9 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        $this->call(FaqSeeder::class);
+        $this->call(MissionSeeder::class);
+
         User::create([
             'name' => '29 Admin',
             'email' => 'admin@29gold.com',
@@ -19,6 +22,16 @@ class DatabaseSeeder extends Seeder
             'address' => 'Yangon Showroom',
             'role' => 'admin',
             'tier' => 'Diamond',
+            'password' => 'password123',
+        ]);
+
+        User::create([
+            'name' => '29 Staff',
+            'email' => 'staff@29gold.com',
+            'phone' => '09222222222',
+            'address' => 'Yangon Showroom',
+            'role' => 'staff',
+            'tier' => 'Bronze',
             'password' => 'password123',
         ]);
 

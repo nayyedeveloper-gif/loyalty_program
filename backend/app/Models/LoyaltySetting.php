@@ -36,6 +36,8 @@ class LoyaltySetting extends Model
             'signup_bonus_points' => static::getInt('signup_bonus_points', 100),
             'referral_bonus_points' => static::getInt('referral_bonus_points', 100),
             'review_bonus_points' => static::getInt('review_bonus_points', 20),
+            'winback_bonus_points' => static::getInt('winback_bonus_points', 50),
+            'winback_inactive_days' => static::getInt('winback_inactive_days', 180),
         ];
     }
 }

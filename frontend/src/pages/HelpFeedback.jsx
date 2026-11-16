@@ -1,39 +1,46 @@
 import { useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { useAuth } from '../context/AuthContext'
 import { useLanguage } from '../context/LanguageContext'
 import PageHeader from '../components/PageHeader'
-import { faCircleQuestion, faEnvelope, faFloppyDisk } from '../lib/icons'
+import api, { getErrorMessage } from '../lib/api'
+import { faCircleQuestion, faEnvelope } from '../lib/icons'
 
 export default function HelpFeedback() {
   const { t } = useLanguage()
-  const { user } = useAuth()
   const [form, setForm] = useState({ subject: '', message: '' })
-  const [sent, setSent] = useState(false)
-  const homePath = user?.role === 'admin' ? '/admin' : '/app'
-  const backLabel = user?.role === 'admin' ? t('backToDashboard') : t('backToMembership')
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+  const [busy, setBusy] = useState(false)
 
-  function onSubmit(e) {
+  async function onSubmit(e) {
     e.preventDefault()
-    const subject = encodeURIComponent(form.subject || t('helpFeedback'))
-    const body = encodeURIComponent(form.message)
-    window.location.href = `mailto:support@29gold.com?subject=${subject}&body=${body}`
-    setSent(true)
+    setBusy(true)
+    setError('')
+    setMessage('')
+    try {
+      await api.post('/customer/feedback', form)
+      setMessage(t('helpFeedbackSent'))
+      setForm({ subject: '', message: '' })
+    } catch (err) {
+      setError(getErrorMessage(err, t('couldNotSendFeedback')))
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
     <div className="space-y-5 w-full">
       <PageHeader
+        showBack
         title={t('helpFeedback')}
         subtitle={t('helpFeedbackCopy')}
         icon={faCircleQuestion}
-        backTo={homePath}
-        backLabel={backLabel}
       />
 
-      {sent && (
+      {error && <div className="alert alert-error" role="alert">{error}</div>}
+      {message && (
         <div className="alert alert-ok" role="status">
-          {t('helpFeedbackSent')}
+          {message}
         </div>
       )}
 
@@ -43,6 +50,7 @@ export default function HelpFeedback() {
           <input
             id="help-subject"
             required
+            maxLength={160}
             value={form.subject}
             onChange={(e) => setForm({ ...form, subject: e.target.value })}
           />
@@ -53,18 +61,16 @@ export default function HelpFeedback() {
             id="help-message"
             rows={6}
             required
+            maxLength={5000}
             value={form.message}
             onChange={(e) => setForm({ ...form, message: e.target.value })}
           />
         </div>
-        <button type="submit" className="btn btn-primary">
+        <button type="submit" className="btn btn-primary" disabled={busy}>
           <FontAwesomeIcon icon={faEnvelope} aria-hidden="true" />
-          {t('sendFeedback')}
+          {busy ? t('saving') : t('sendFeedback')}
         </button>
-        <p className="type-meta text-[var(--color-muted)] m-0 flex items-center gap-2">
-          <FontAwesomeIcon icon={faFloppyDisk} aria-hidden="true" />
-          {t('helpFeedbackHint')}
-        </p>
+        <p className="type-meta text-[var(--color-muted)] m-0">{t('helpFeedbackHint')}</p>
       </form>
     </div>
   )

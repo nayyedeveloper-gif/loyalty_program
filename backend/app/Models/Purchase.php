@@ -19,7 +19,11 @@ class Purchase extends Model
         'points_earned',
         'points_redeemed',
         'amount_offset_mmk',
+        'earn_snapshot',
         'payment_method',
+        'status',
+        'cancel_reason',
+        'cancelled_at',
     ];
 
     protected function casts(): array
@@ -31,7 +35,14 @@ class Purchase extends Model
             'points_earned' => 'integer',
             'points_redeemed' => 'integer',
             'amount_offset_mmk' => 'integer',
+            'earn_snapshot' => 'array',
+            'cancelled_at' => 'datetime',
         ];
+    }
+
+    public function isCancelled(): bool
+    {
+        return $this->status === 'cancelled';
     }
 
     public function user(): BelongsTo

@@ -70,6 +70,8 @@ export function AuthProvider({ children }) {
       logout,
       setUser,
       isAdmin: user?.role === 'admin',
+      isStaff: user?.role === 'staff',
+      isPortalUser: user?.role === 'admin' || user?.role === 'staff',
       isCustomer: user?.role === 'customer',
       getErrorMessage,
     }

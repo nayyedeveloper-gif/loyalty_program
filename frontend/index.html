@@ -25,6 +25,9 @@
           document.documentElement.dataset.theme = theme
           document.documentElement.dataset.themePreference = preference
           document.documentElement.style.colorScheme = theme
+          var standalone = window.matchMedia('(display-mode: standalone)').matches
+            || window.navigator.standalone === true
+          if (standalone) document.documentElement.classList.add('standalone-app')
         } catch (e) {}
       })()
     </script>

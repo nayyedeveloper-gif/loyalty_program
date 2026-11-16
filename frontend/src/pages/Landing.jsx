@@ -25,7 +25,9 @@ const TIERS = [
 export default function Landing() {
   const { user } = useAuth()
   const { t } = useLanguage()
-  const destination = user ? (user.role === 'admin' ? '/admin' : '/app') : '/signin'
+  const destination = user
+    ? (user.role === 'admin' ? '/admin' : user.role === 'staff' ? '/admin/purchases' : '/app')
+    : '/signin'
 
   const steps = [
     { icon: faUserPlus, title: t('step1Title'), copy: t('step1Copy') },

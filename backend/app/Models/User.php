@@ -26,6 +26,7 @@ class User extends Authenticatable
         'email',
         'phone',
         'address',
+        'date_of_birth',
         'avatar',
         'preferences',
         'role',
@@ -81,10 +82,16 @@ class User extends Authenticatable
             'tier_points_365d' => 'integer',
             'total_spent' => 'integer',
             'preferences' => 'array',
+            'date_of_birth' => 'date',
             'last_activity_at' => 'datetime',
             'login_streak' => 'integer',
             'last_login_streak_date' => 'date',
         ];
+    }
+
+    public function appNotifications(): HasMany
+    {
+        return $this->hasMany(AppNotification::class);
     }
 
     public function getAvatarUrlAttribute(): ?string
@@ -128,9 +135,24 @@ class User extends Authenticatable
         return $this->belongsTo(User::class, 'referred_by');
     }
 
+    public function referrals(): HasMany
+    {
+        return $this->hasMany(User::class, 'referred_by');
+    }
+
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
+    }
+
+    public function isStaff(): bool
+    {
+        return $this->role === 'staff';
+    }
+
+    public function isPortalUser(): bool
+    {
+        return $this->isAdmin() || $this->isStaff();
     }
 
     public function isCustomer(): bool

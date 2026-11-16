@@ -7,6 +7,7 @@ use App\Models\LoyaltySetting;
 use App\Models\PasswordOtp;
 use App\Models\User;
 use App\Services\MissionService;
+use App\Services\NotificationService;
 use App\Services\PointsEngine;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -62,6 +63,7 @@ class AuthController extends Controller
                     PointsEngine::creditBonus($referrer, $referralBonus, 'referral', [
                         'referred_user_id' => $user->id,
                     ]);
+                    NotificationService::referralJoined($referrer->fresh(), (string) $user->name);
                 }
             }
 
@@ -96,19 +98,24 @@ class AuthController extends Controller
             $today = now()->toDateString();
             $yesterday = now()->subDay()->toDateString();
             $last = optional($user->last_login_streak_date)?->toDateString();
+            $countedNewDay = false;
 
             if ($last === $today) {
-                // already counted today
+                // Same calendar day — streak and visit missions already counted.
             } elseif ($last === $yesterday) {
                 $user->login_streak = ((int) $user->login_streak) + 1;
                 $user->last_login_streak_date = $today;
+                $countedNewDay = true;
             } else {
                 $user->login_streak = 1;
                 $user->last_login_streak_date = $today;
+                $countedNewDay = true;
             }
             $user->save();
 
-            MissionService::recordLogin($user);
+            if ($countedNewDay) {
+                MissionService::recordLogin($user->fresh());
+            }
         }
 
         $token = $user->createToken('auth')->plainTextToken;

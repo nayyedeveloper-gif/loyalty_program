@@ -5,12 +5,15 @@ import { registerSW } from 'virtual:pwa-register'
 import { AppSettingsProvider } from './context/AppSettingsContext'
 import { AuthProvider } from './context/AuthContext'
 import { LanguageProvider } from './context/LanguageContext'
+import { NotificationProvider } from './context/NotificationContext'
 import { ThemeProvider } from './context/ThemeContext'
+import { initNativeShell } from './mobile/capacitorApp'
 import App from './App'
 import './lib/icons'
 import './index.css'
 
 registerSW({ immediate: true })
+initNativeShell()
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -19,7 +22,9 @@ createRoot(document.getElementById('root')).render(
         <LanguageProvider>
           <AppSettingsProvider>
             <AuthProvider>
-              <App />
+              <NotificationProvider>
+                <App />
+              </NotificationProvider>
             </AuthProvider>
           </AppSettingsProvider>
         </LanguageProvider>

@@ -27,6 +27,7 @@ Open http://localhost:5173
 | Role | Email | Password |
 |------|-------|----------|
 | Admin | admin@29gold.com | password123 |
+| Staff | staff@29gold.com | password123 |
 | Customer | customer@29gold.com | password123 |
 
 OTP emails are written to `backend/storage/logs/laravel.log` in local mode. The forgot-password UI also shows `debug_otp` when `APP_ENV=local`.

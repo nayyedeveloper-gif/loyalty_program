@@ -21,7 +21,9 @@ export default function SignIn() {
     setBusy(true)
     try {
       const user = await login(form)
-      navigate(user.role === 'admin' ? '/admin' : '/app')
+      if (user.role === 'admin') navigate('/admin')
+      else if (user.role === 'staff') navigate('/admin/purchases')
+      else navigate('/app')
     } catch (err) {
       setError(getErrorMessage(err, t('couldNotSignIn')))
     } finally {

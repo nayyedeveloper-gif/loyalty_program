@@ -3,13 +3,17 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { useAuth } from '../context/AuthContext'
 import { useLanguage } from '../context/LanguageContext'
+import { useNotifications } from '../context/NotificationContext'
 import LanguageSwitcher from './LanguageSwitcher'
 import ThemeSwitcher from './ThemeSwitcher'
 import BrandLogo from './BrandLogo'
+import { mediaUrl } from '../lib/api'
 import {
+  faBell,
   faChevronRight,
   faCircleQuestion,
   faEllipsis,
+  faEnvelopeOpenText,
   faGear,
   faRightFromBracket,
 } from '../lib/icons'
@@ -47,6 +51,7 @@ function linkIsActive(pathname, link) {
 
 export default function PanelLayout({ titleKey, links }) {
   const { user, logout } = useAuth()
+  const { unreadCount, markAllRead } = useNotifications()
   const { t } = useLanguage()
   const navigate = useNavigate()
   const location = useLocation()
@@ -133,8 +138,22 @@ export default function PanelLayout({ titleKey, links }) {
     navigate('/signin')
   }
 
-  const settingsPath = user?.role === 'admin' ? '/admin/settings/general' : '/app/settings/general'
-  const helpPath = user?.role === 'admin' ? '/admin/help' : '/app/help'
+  const isPortal = user?.role === 'admin' || user?.role === 'staff'
+  const settingsPath = isPortal ? '/admin/settings/general' : '/app/settings/general'
+  const helpPath = user?.role === 'admin' ? '/admin/help' : isPortal ? '/admin/settings/faq' : '/app/help'
+  const notificationsPath = isPortal ? '/admin/notifications' : '/app/notifications'
+
+  async function openNotifications() {
+    closeMobile()
+    if (unreadCount > 0) {
+      try {
+        await markAllRead()
+      } catch {
+        // Badge will resync on next poll if mark-all failed.
+      }
+    }
+    navigate(notificationsPath)
+  }
 
   function toggleSidebar() {
     if (isMobile) {
@@ -300,8 +319,19 @@ export default function PanelLayout({ titleKey, links }) {
                     navigate(helpPath)
                   }}
                 >
-                  <FontAwesomeIcon icon={faCircleQuestion} aria-hidden="true" />
-                  <span>{t('helpFeedback')}</span>
+                  <FontAwesomeIcon
+                    icon={user?.role === 'admin' ? faEnvelopeOpenText : faCircleQuestion}
+                    aria-hidden="true"
+                  />
+                  <span>
+                    {t(
+                      user?.role === 'admin'
+                        ? 'customerFeedback'
+                        : user?.role === 'staff'
+                          ? 'help'
+                          : 'helpFeedback',
+                    )}
+                  </span>
                 </button>
               </div>
             )}
@@ -314,7 +344,7 @@ export default function PanelLayout({ titleKey, links }) {
               title={user?.name || t('accountMenu')}
             >
               <div className="sidebar-avatar" aria-hidden="true">
-                {user?.avatar_url ? <img src={user.avatar_url} alt="" /> : initials}
+                {user?.avatar_url ? <img src={mediaUrl(user.avatar_url)} alt="" /> : initials}
               </div>
               {showLabels && (
                 <>
@@ -352,10 +382,28 @@ export default function PanelLayout({ titleKey, links }) {
             <BrandLogo size="sm" to="/" className="panel-toolbar-logo" showText />
           </div>
           <div className="panel-topbar-actions">
+            <button
+              type="button"
+              className="btn btn-ghost btn-icon-action notification-bell"
+              onClick={openNotifications}
+              aria-label={t('notifications')}
+              title={t('notifications')}
+            >
+              <FontAwesomeIcon icon={faBell} aria-hidden="true" />
+              {unreadCount > 0 ? (
+                <span className="notification-badge" aria-hidden="true">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              ) : null}
+            </button>
             <ThemeSwitcher variant="icon" />
             <LanguageSwitcher compact={isMobile} />
             <span className="role-badge desktop-only">
-              {user?.role === 'admin' ? t('adminPortal') : t('memberApp')}
+              {user?.role === 'admin'
+                ? t('adminPortal')
+                : user?.role === 'staff'
+                  ? t('staffPortal')
+                  : t('memberApp')}
             </span>
           </div>
         </header>

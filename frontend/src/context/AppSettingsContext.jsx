@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import api from '../lib/api'
+import api, { mediaUrl } from '../lib/api'
 
 const AppSettingsContext = createContext(null)
 
@@ -76,7 +76,7 @@ export function AppSettingsProvider({ children }) {
       removeLogo,
       appName: settings.app_name || defaults.app_name,
       appTagline: settings.app_tagline || defaults.app_tagline,
-      appLogoUrl: settings.app_logo_url || null,
+      appLogoUrl: settings.app_logo_url ? mediaUrl(settings.app_logo_url) : null,
     }
   }, [settings, loading, persist])
 

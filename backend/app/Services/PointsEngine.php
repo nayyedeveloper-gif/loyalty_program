@@ -140,6 +140,8 @@ class PointsEngine
             ->where('created_at', '>=', $windowStart)
             ->sum('points');
 
+        $previousTier = (string) ($user->tier ?: 'Bronze');
+
         $user->redeemable_points = max(0, $wallet);
         $user->points = max(0, $wallet); // legacy mirror
         $user->tier_points_365d = max(0, $tierPoints);
@@ -151,7 +153,17 @@ class PointsEngine
 
         $user->save();
 
-        return $user->fresh();
+        $fresh = $user->fresh();
+        if ($fresh && $previousTier !== (string) $fresh->tier) {
+            $ordered = TierService::tiers()->pluck('name')->values();
+            $prevIndex = $ordered->search($previousTier);
+            $nextIndex = $ordered->search($fresh->tier);
+            if ($prevIndex !== false && $nextIndex !== false && $nextIndex > $prevIndex) {
+                NotificationService::tierUpgraded($fresh, $previousTier, (string) $fresh->tier);
+            }
+        }
+
+        return $fresh;
     }
 
     public static function reversePurchaseLedger(Purchase $purchase): void
@@ -234,6 +246,44 @@ class PointsEngine
         return $entry;
     }
 
+    public static function adjustPoints(
+        User $user,
+        int $points,
+        string $reason,
+        bool $tierEligible = false,
+        ?int $adminId = null,
+    ): PointLedger {
+        if ($points === 0) {
+            throw ValidationException::withMessages(['points' => ['Adjustment points cannot be zero.']]);
+        }
+
+        $reason = trim($reason);
+        if ($reason === '') {
+            throw ValidationException::withMessages(['reason' => ['A reason is required for point adjustments.']]);
+        }
+
+        if ($points < 0 && abs($points) > (int) $user->redeemable_points) {
+            throw ValidationException::withMessages([
+                'points' => ['Cannot deduct more than the customer redeemable balance.'],
+            ]);
+        }
+
+        $entry = self::writeLedger(
+            user: $user,
+            type: 'adjust',
+            source: 'admin',
+            points: $points,
+            tierEligible: $points > 0 && $tierEligible,
+            meta: [
+                'reason' => $reason,
+                'admin_id' => $adminId,
+            ],
+        );
+        self::refreshUserBalances($user, touchActivity: true);
+
+        return $entry;
+    }
+
     public static function redeemCatalog(User $user, int $pointsCost, string $source = 'catalog', array $meta = []): PointLedger
     {
         if ($pointsCost <= 0) {
@@ -250,6 +300,31 @@ class PointsEngine
             points: -1 * $pointsCost,
             tierEligible: false,
             meta: $meta,
+        );
+        self::refreshUserBalances($user, touchActivity: true);
+
+        return $entry;
+    }
+
+    public static function refundCatalogRedemption(User $user, PointLedger $redeemEntry, array $meta = []): PointLedger
+    {
+        if ($redeemEntry->type !== 'redeem' || (int) $redeemEntry->points >= 0) {
+            throw ValidationException::withMessages(['redemption' => ['Invalid redemption ledger entry.']]);
+        }
+
+        $already = PointLedger::where('related_ledger_id', $redeemEntry->id)->where('type', 'reverse')->exists();
+        if ($already) {
+            throw ValidationException::withMessages(['redemption' => ['This redemption was already refunded.']]);
+        }
+
+        $entry = self::writeLedger(
+            user: $user,
+            type: 'reverse',
+            source: 'catalog',
+            points: -1 * (int) $redeemEntry->points,
+            tierEligible: false,
+            meta: array_merge(['reverses_ledger_id' => $redeemEntry->id], $meta),
+            relatedLedgerId: $redeemEntry->id,
         );
         self::refreshUserBalances($user, touchActivity: true);
 
@@ -285,6 +360,7 @@ class PointsEngine
                             meta: ['reason' => 'inactivity'],
                         );
                         self::refreshUserBalances($user, touchActivity: false);
+                        NotificationService::pointsExpired($user->fresh(), $balance);
                         $expiredCount++;
                     });
                 }
