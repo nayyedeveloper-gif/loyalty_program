@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import api from '../lib/api'
 
 const AppSettingsContext = createContext(null)
@@ -10,30 +10,33 @@ const defaults = {
   app_logo_url: null,
 }
 
-function normalizeSettings(raw = {}) {
+function normalizeSettings(raw) {
+  const source = raw && typeof raw === 'object' ? raw : {}
   return {
     ...defaults,
-    ...raw,
-    app_logo_url: raw.app_logo_url || null,
+    ...source,
+    app_logo_url: source.app_logo_url || null,
+  }
+}
+
+function readCachedSettings() {
+  try {
+    return normalizeSettings(JSON.parse(localStorage.getItem('appSettings') || 'null'))
+  } catch {
+    return { ...defaults }
   }
 }
 
 export function AppSettingsProvider({ children }) {
-  const [settings, setSettings] = useState(() => {
-    try {
-      return normalizeSettings(JSON.parse(localStorage.getItem('appSettings') || 'null'))
-    } catch {
-      return { ...defaults }
-    }
-  })
+  const [settings, setSettings] = useState(readCachedSettings)
   const [loading, setLoading] = useState(true)
 
-  function persist(next) {
+  const persist = useCallback((next) => {
     const normalized = normalizeSettings(next)
     setSettings(normalized)
     localStorage.setItem('appSettings', JSON.stringify(normalized))
     return normalized
-  }
+  }, [])
 
   useEffect(() => {
     api
@@ -45,7 +48,7 @@ export function AppSettingsProvider({ children }) {
         // keep defaults / cached
       })
       .finally(() => setLoading(false))
-  }, [])
+  }, [persist])
 
   const value = useMemo(() => {
     async function updateSettings(payload) {
@@ -75,7 +78,7 @@ export function AppSettingsProvider({ children }) {
       appTagline: settings.app_tagline || defaults.app_tagline,
       appLogoUrl: settings.app_logo_url || null,
     }
-  }, [settings, loading])
+  }, [settings, loading, persist])
 
   return <AppSettingsContext.Provider value={value}>{children}</AppSettingsContext.Provider>
 }

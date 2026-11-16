@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAppSettings } from '../context/AppSettingsContext'
 import { useLanguage } from '../context/LanguageContext'
+
+const DEFAULT_LOGO = '/brand/29-logo.png'
 
 export default function BrandLogo({
   to = '/',
@@ -13,7 +16,12 @@ export default function BrandLogo({
   const { appName, appTagline, appLogoUrl } = useAppSettings()
   const brandName = appName || t('brandTitle')
   const brandSubtitle = appTagline || t('brandSubtitle')
-  const logoSrc = appLogoUrl || '/brand/29-logo.png'
+  const preferredSrc = appLogoUrl || DEFAULT_LOGO
+  const [logoSrc, setLogoSrc] = useState(preferredSrc)
+
+  useEffect(() => {
+    setLogoSrc(preferredSrc)
+  }, [preferredSrc])
 
   const content = (
     <>
@@ -21,6 +29,9 @@ export default function BrandLogo({
         src={logoSrc}
         alt={showText ? '' : brandName}
         className={`brand-logo-mark brand-logo-mark-${size}`}
+        onError={() => {
+          if (logoSrc !== DEFAULT_LOGO) setLogoSrc(DEFAULT_LOGO)
+        }}
       />
       {showText && (
         <span className="brand-logo-text">
