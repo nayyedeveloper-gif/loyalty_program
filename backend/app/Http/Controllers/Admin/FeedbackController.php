@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\FeedbackMessage;
 use App\Models\FeedbackReply;
 use App\Services\NotificationService;
+use App\Support\DateRangeQuery;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -38,6 +39,8 @@ class FeedbackController extends Controller
                     });
             });
         }
+
+        DateRangeQuery::apply($query, $request);
 
         $feedback = $query->paginate((int) $request->integer('per_page', 20));
 

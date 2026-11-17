@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
@@ -21,6 +22,8 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('auth', function (Request $request) {
             return Limit::perMinute(8)->by($request->ip());
         });
+
+        Broadcast::routes(['middleware' => ['auth:sanctum'], 'prefix' => 'api']);
 
         Route::bind('staff', function (string $value) {
             return User::whereIn('role', ['admin', 'staff'])->findOrFail($value);

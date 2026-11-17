@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import DateRangeFilter from '../../components/DateRangeFilter'
 import Modal from '../../components/Modal'
 import PageHeader from '../../components/PageHeader'
 import Pagination from '../../components/Pagination'
@@ -27,6 +28,8 @@ export default function AdminLedger() {
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebouncedValue(search, 300)
   const [type, setType] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
@@ -44,13 +47,21 @@ export default function AdminLedger() {
     }
   }
 
-  async function load(nextPage = 1, query = debouncedSearch, nextType = type) {
+  async function load(
+    nextPage = 1,
+    query = debouncedSearch,
+    nextType = type,
+    nextDateFrom = dateFrom,
+    nextDateTo = dateTo,
+  ) {
     setLoading(true)
     try {
       const { data } = await api.get('/admin/ledger', {
         params: {
           search: query || undefined,
           type: nextType || undefined,
+          date_from: nextDateFrom || undefined,
+          date_to: nextDateTo || undefined,
           page: nextPage,
           per_page: 20,
         },
@@ -70,8 +81,8 @@ export default function AdminLedger() {
   }, [])
 
   useEffect(() => {
-    load(1, debouncedSearch, type)
-  }, [debouncedSearch, type])
+    load(1, debouncedSearch, type, dateFrom, dateTo)
+  }, [debouncedSearch, type, dateFrom, dateTo])
 
   function openAdjust() {
     setForm(emptyAdjust)
@@ -87,7 +98,12 @@ export default function AdminLedger() {
     try {
       await downloadCsv(
         '/admin/export/ledger',
-        { search: search || undefined, type: type || undefined },
+        {
+          search: search || undefined,
+          type: type || undefined,
+          date_from: dateFrom || undefined,
+          date_to: dateTo || undefined,
+        },
         'ledger.csv',
       )
       setMessage(t('exportStarted'))
@@ -158,7 +174,7 @@ export default function AdminLedger() {
         role="search"
         onSubmit={(e) => {
           e.preventDefault()
-          load(1, search.trim(), type)
+          load(1, search.trim(), type, dateFrom, dateTo)
         }}
       >
         <label className="sr-only" htmlFor="ledger-search">{t('search')}</label>
@@ -178,6 +194,16 @@ export default function AdminLedger() {
             </option>
           ))}
         </select>
+        <DateRangeFilter
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          t={t}
+          lang={lang}
+          onChange={({ dateFrom: nextFrom, dateTo: nextTo }) => {
+            setDateFrom(nextFrom)
+            setDateTo(nextTo)
+          }}
+        />
         <button type="submit" className="btn btn-ghost">
           {t('search')}
         </button>

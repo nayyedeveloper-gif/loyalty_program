@@ -7,6 +7,7 @@ use App\Models\PointLedger;
 use App\Models\User;
 use App\Services\AuditService;
 use App\Services\PointsEngine;
+use App\Support\DateRangeQuery;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -40,6 +41,8 @@ class LedgerController extends Controller
                     ->orWhere('phone', 'like', "%{$search}%");
             });
         }
+
+        DateRangeQuery::apply($query, $request);
 
         $ledger = $query->paginate((int) $request->integer('per_page', 20));
 

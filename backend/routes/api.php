@@ -17,6 +17,7 @@ use App\Http\Controllers\Admin\RedemptionController;
 use App\Http\Controllers\Admin\RewardController;
 use App\Http\Controllers\Admin\StaffController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ChatController;
 use App\Http\Controllers\Customer\FeedbackController as CustomerFeedbackController;
 use App\Http\Controllers\Customer\MembershipController;
 use App\Http\Controllers\FaqController;
@@ -50,6 +51,21 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
     Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
+
+    Route::get('/chat/unread-count', [ChatController::class, 'unreadCount']);
+    Route::get('/chat/gifs', [ChatController::class, 'gifs']);
+    Route::get('/chat/gif-categories', [ChatController::class, 'gifCategories']);
+    Route::get('/chat/conversations', [ChatController::class, 'conversations']);
+    Route::post('/chat/conversations/open', [ChatController::class, 'open']);
+    Route::post('/chat/conversations/start', [ChatController::class, 'start']);
+    Route::post('/chat/conversations/{conversation}/close', [ChatController::class, 'close']);
+    Route::get('/chat/conversations/{conversation}/messages', [ChatController::class, 'messages']);
+    Route::post('/chat/conversations/{conversation}/messages', [ChatController::class, 'send']);
+    Route::put('/chat/conversations/{conversation}/messages/{message}', [ChatController::class, 'updateMessage']);
+    Route::post('/chat/conversations/{conversation}/read', [ChatController::class, 'markRead']);
+    Route::post('/chat/conversations/{conversation}/delivered', [ChatController::class, 'markDelivered']);
+    Route::post('/chat/conversations/{conversation}/typing', [ChatController::class, 'typing']);
+    Route::post('/chat/conversations/{conversation}/call', [ChatController::class, 'callSignal']);
 });
 
 // Shop portal: admin + staff

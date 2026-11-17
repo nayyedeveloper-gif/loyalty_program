@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import DateRangeFilter from '../../components/DateRangeFilter'
 import Modal from '../../components/Modal'
 import PageHeader from '../../components/PageHeader'
 import Pagination from '../../components/Pagination'
@@ -17,6 +18,8 @@ export default function AdminFeedback() {
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebouncedValue(search, 300)
   const [status, setStatus] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
@@ -24,13 +27,21 @@ export default function AdminFeedback() {
   const [reply, setReply] = useState('')
   const [busy, setBusy] = useState(false)
 
-  async function load(nextPage = 1, query = debouncedSearch, nextStatus = status) {
+  async function load(
+    nextPage = 1,
+    query = debouncedSearch,
+    nextStatus = status,
+    nextDateFrom = dateFrom,
+    nextDateTo = dateTo,
+  ) {
     setLoading(true)
     try {
       const { data } = await api.get('/admin/feedback', {
         params: {
           search: query || undefined,
           status: nextStatus || undefined,
+          date_from: nextDateFrom || undefined,
+          date_to: nextDateTo || undefined,
           page: nextPage,
           per_page: 20,
         },
@@ -46,8 +57,8 @@ export default function AdminFeedback() {
   }
 
   useEffect(() => {
-    load(1, debouncedSearch, status)
-  }, [debouncedSearch, status])
+    load(1, debouncedSearch, status, dateFrom, dateTo)
+  }, [debouncedSearch, status, dateFrom, dateTo])
 
   async function openItem(item) {
     setReply('')
@@ -137,7 +148,7 @@ export default function AdminFeedback() {
         role="search"
         onSubmit={(e) => {
           e.preventDefault()
-          load(1, search.trim(), status)
+          load(1, search.trim(), status, dateFrom, dateTo)
         }}
       >
         <label className="sr-only" htmlFor="feedback-search">{t('search')}</label>
@@ -157,6 +168,16 @@ export default function AdminFeedback() {
             </option>
           ))}
         </select>
+        <DateRangeFilter
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          t={t}
+          lang={lang}
+          onChange={({ dateFrom: nextFrom, dateTo: nextTo }) => {
+            setDateFrom(nextFrom)
+            setDateTo(nextTo)
+          }}
+        />
         <button type="submit" className="btn btn-ghost">
           {t('search')}
         </button>
