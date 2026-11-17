@@ -103,6 +103,7 @@ class SpinWheelSeeder extends Seeder
         }
 
         SpinwheelSetting::setValue('grant_on_registration', 0);
+        SpinwheelSetting::setValue('registration_grant_message', 'Welcome! You received {count} free spin(s). Open Spinwheel to try your luck.');
         SpinwheelSetting::setValue('grant_on_login_promo', 0);
         SpinwheelSetting::setValue('login_promo_active', false);
         SpinwheelSetting::setValue('default_valid_hours', 168);

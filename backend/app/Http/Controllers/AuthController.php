@@ -29,7 +29,7 @@ class AuthController extends Controller
             'referral_code' => ['nullable', 'string', 'max:32'],
         ]);
 
-        $user = DB::transaction(function () use ($data) {
+        [$user, $spinGrant] = DB::transaction(function () use ($data) {
             $referrer = null;
             if (! empty($data['referral_code'])) {
                 $referrer = User::where('role', 'customer')
@@ -66,9 +66,9 @@ class AuthController extends Controller
                 }
             }
 
-            app(SpinGrantService::class)->grantOnRegistration($user);
+            $spinGrant = app(SpinGrantService::class)->grantOnRegistration($user);
 
-            return $user->fresh();
+            return [$user->fresh(), $spinGrant];
         });
 
         $token = $user->createToken('auth')->plainTextToken;
@@ -77,6 +77,7 @@ class AuthController extends Controller
             'message' => 'Account created successfully.',
             'user' => $user,
             'token' => $token,
+            'spin_grant' => $spinGrant,
         ], 201);
     }
 
@@ -112,15 +113,18 @@ class AuthController extends Controller
             $user->save();
 
             MissionService::recordLogin($user);
-            app(SpinGrantService::class)->grantOnLoginPromo($user);
         }
 
         $token = $user->createToken('auth')->plainTextToken;
+        $spinGrant = $user->isCustomer()
+            ? app(SpinGrantService::class)->pendingRegistrationNotice($user)
+            : null;
 
         return response()->json([
             'message' => 'Signed in successfully.',
             'user' => $user->fresh(),
             'token' => $token,
+            'spin_grant' => $spinGrant,
         ]);
     }
 

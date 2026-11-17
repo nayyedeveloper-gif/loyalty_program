@@ -53,8 +53,10 @@ class SpinwheelSetting extends Model
     {
         return [
             'grant_on_registration' => static::getInt('grant_on_registration', 0),
-            'grant_on_login_promo' => static::getInt('grant_on_login_promo', 0),
-            'login_promo_active' => static::getBool('login_promo_active', false),
+            'registration_grant_message' => (string) static::getValue(
+                'registration_grant_message',
+                'Welcome! You received {count} free spin(s). Open Spinwheel to try your luck.'
+            ),
             'default_valid_hours' => static::getInt('default_valid_hours', (int) config('spinwheel.default_spin_valid_hours', 168)),
         ];
     }

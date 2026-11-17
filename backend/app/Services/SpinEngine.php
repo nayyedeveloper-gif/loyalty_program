@@ -111,9 +111,23 @@ class SpinEngine
                 return response()->json(['message' => 'No active wheel'], 422);
             }
 
-            $segment = $this->pickWeighted($wheel->segments);
+            $eligible = $wheel->segments->filter(fn (WheelSegment $s) => $s->hasAvailableStock())->values();
+            $segment = $this->pickWeighted($eligible);
             if (! $segment) {
                 return response()->json(['message' => 'Invalid prize weights'], 422);
+            }
+
+            $lockedSegment = WheelSegment::query()->whereKey($segment->id)->lockForUpdate()->first();
+            if (! $lockedSegment || ! $lockedSegment->is_active || ! $lockedSegment->hasAvailableStock()) {
+                return response()->json(['message' => 'Selected prize is no longer available. Please try again.'], 422);
+            }
+
+            if (! $lockedSegment->consumeStock()) {
+                return response()->json(['message' => 'Selected prize is out of stock. Please try again.'], 422);
+            }
+
+            if ($lockedSegment->is_out_of_stock) {
+                $wheel->bumpContentRevision();
             }
 
             $usage->update([
@@ -125,7 +139,7 @@ class SpinEngine
                 usage: $usage,
                 user: $user,
                 wheel: $wheel,
-                segment: $segment,
+                segment: $lockedSegment->fresh(),
                 idempotencyKey: $idempotencyKey,
                 isGuest: false,
             );

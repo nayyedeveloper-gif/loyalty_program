@@ -192,6 +192,7 @@ export default function AdminSpinWheel() {
 
   const totalWeight = wheel?.segments?.filter((s) => s.is_active).reduce((a, s) => a + Number(s.weight), 0) || 0
   const previewSegments = wheel?.segments?.filter((s) => s.is_active) || []
+  const outOfStock = wheel?.segments?.filter((s) => s.stock !== null && s.stock !== undefined && Number(s.stock) <= 0) || []
 
   const createWheel = async () => {
     setBusy(true)
@@ -240,6 +241,13 @@ export default function AdminSpinWheel() {
   return (
     <div className="admin-body spinwheel-admin">
       {(msg || error) && <div className={`admin-flash ${error ? 'err' : 'ok'}`}>{error || msg}</div>}
+      {!!outOfStock.length && (
+        <div className="admin-flash err">
+          {outOfStock.length} prize{outOfStock.length === 1 ? '' : 's'} out of stock and removed from the live wheel:
+          {' '}
+          {outOfStock.map((s) => s.prize_label).join(', ')}. Restock and save to reactivate.
+        </div>
+      )}
 
       {wheels.length > 1 && (
         <div className="admin-card" style={{ marginBottom: '1rem' }}>
@@ -378,6 +386,9 @@ export default function AdminSpinWheel() {
                     <div className="admin-muted">
                       {s.display_label} · weight {s.weight}
                       {totalWeight ? ` (${Math.round((s.weight / totalWeight) * 100)}%)` : ''} · {s.tier}
+                      {s.stock === null || s.stock === undefined
+                        ? ' · unlimited stock'
+                        : ` · stock ${s.stock}${s.stock <= 0 ? ' · OUT' : ''}`}
                       {!s.is_active ? ' · inactive' : ''}
                     </div>
                   </div>

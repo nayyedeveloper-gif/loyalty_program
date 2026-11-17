@@ -18,6 +18,8 @@ const blank = {
   requires_claim: true,
   claim_days: 7,
   is_active: true,
+  stock: '',
+  stock_unlimited: true,
 }
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024
@@ -89,6 +91,8 @@ export default function AdminSpinPrizes() {
           requires_claim: !!segment.requires_claim,
           claim_days: segment.claim_days ?? '',
           is_active: segment.is_active !== false,
+          stock: segment.stock === null || segment.stock === undefined ? '' : segment.stock,
+          stock_unlimited: segment.stock === null || segment.stock === undefined,
           image_url: url,
         })
         setWheelId(String(segment.wheel_id))
@@ -210,9 +214,11 @@ export default function AdminSpinPrizes() {
         display_label: form.display_label || form.prize_label,
         weight: Number(form.weight) || 1,
         claim_days: form.requires_claim && form.claim_days !== '' ? form.claim_days : '',
+        stock: form.stock_unlimited ? '' : (form.stock === '' ? '0' : form.stock),
       }).forEach(([key, value]) => {
-        if (key === 'image_url') return
+        if (key === 'image_url' || key === 'stock_unlimited') return
         if (typeof value === 'boolean') fd.append(key, value ? '1' : '0')
+        else if (key === 'stock') fd.append(key, form.stock_unlimited ? '' : String(value === '' ? 0 : value))
         else if (value !== null && value !== undefined && value !== '') fd.append(key, String(value))
       })
 
@@ -354,6 +360,35 @@ export default function AdminSpinPrizes() {
             <input type="checkbox" checked={!!form.is_active} onChange={(e) => patch({ is_active: e.target.checked })} />
             Active on wheel
           </label>
+
+          <h3 style={{ fontSize: '0.95rem', marginTop: '1.2rem' }}>Inventory</h3>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.9rem' }}>
+            <input
+              type="checkbox"
+              checked={!!form.stock_unlimited}
+              onChange={(e) => patch({
+                stock_unlimited: e.target.checked,
+                stock: e.target.checked ? '' : (form.stock === '' ? 10 : form.stock),
+              })}
+            />
+            Unlimited stock
+          </label>
+          {!form.stock_unlimited && (
+            <>
+              <label className="admin-label">Remaining stock</label>
+              <input
+                className="admin-input"
+                type="number"
+                min={0}
+                required
+                value={form.stock}
+                onChange={(e) => patch({ stock: e.target.value })}
+              />
+              <p className="admin-muted" style={{ margin: '0.35rem 0 0' }}>
+                When stock hits 0 the prize deactivates automatically and admins get a red alert on Spinwheel.
+              </p>
+            </>
+          )}
 
           <h3 style={{ fontSize: '0.95rem', marginTop: '1.2rem' }}>Collection configuration</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>

@@ -332,8 +332,7 @@ class SpinController extends Controller
     {
         $data = $request->validate([
             'grant_on_registration' => 'sometimes|integer|min:0|max:50',
-            'grant_on_login_promo' => 'sometimes|integer|min:0|max:50',
-            'login_promo_active' => 'sometimes|boolean',
+            'registration_grant_message' => 'sometimes|string|max:500',
             'default_valid_hours' => 'sometimes|integer|min:1|max:8760',
         ]);
 
