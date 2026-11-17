@@ -87,9 +87,11 @@ class SettingsController extends Controller
                 Rule::unique('users', 'phone')->ignore($user->id),
             ],
             'address' => ['nullable', 'string', 'max:255'],
+            'date_of_birth' => ['nullable', 'date', 'before:today', 'after:1900-01-01'],
             'preferences' => ['nullable', 'array'],
             'preferences.email_notifications' => ['sometimes', 'boolean'],
             'preferences.purchase_alerts' => ['sometimes', 'boolean'],
+            'preferences.in_app_notifications' => ['sometimes', 'boolean'],
         ]);
 
         $preferences = array_merge(
@@ -101,6 +103,7 @@ class SettingsController extends Controller
             'name' => $data['name'],
             'phone' => $data['phone'] ?? $user->phone,
             'address' => $data['address'] ?? $user->address,
+            'date_of_birth' => array_key_exists('date_of_birth', $data) ? $data['date_of_birth'] : $user->date_of_birth,
             'preferences' => $preferences,
         ]);
 
@@ -144,6 +147,30 @@ class SettingsController extends Controller
         return response()->json([
             'message' => 'Profile photo removed.',
             'user' => $user->fresh(),
+        ]);
+    }
+
+    public function deleteAccount(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        // Least privilege: only members may self-delete. Portal accounts are managed by admins.
+        if (! $user->isCustomer()) {
+            return response()->json([
+                'message' => 'Shop accounts cannot self-delete. Ask another admin to manage portal users.',
+            ], 403);
+        }
+
+        if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
+            Storage::disk('public')->delete($user->avatar);
+        }
+
+        $request->user()->currentAccessToken()?->delete();
+        $user->tokens()->delete();
+        $user->delete();
+
+        return response()->json([
+            'message' => 'Account deleted.',
         ]);
     }
 }

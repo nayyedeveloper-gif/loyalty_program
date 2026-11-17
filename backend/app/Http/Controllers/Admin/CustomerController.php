@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\AuditService;
 use App\Services\PointsEngine;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,7 +22,8 @@ class CustomerController extends Controller
                 $q->where('name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%")
                     ->orWhere('phone', 'like', "%{$search}%")
-                    ->orWhere('customer_code', 'like', "%{$search}%");
+                    ->orWhere('customer_code', 'like', "%{$search}%")
+                    ->orWhere('nrc_number', 'like', "%{$search}%");
             });
         }
 
@@ -49,9 +51,18 @@ class CustomerController extends Controller
         $customer = User::create([
             ...$data,
             'role' => 'customer',
-            'tier' => 'Bronze',
+            'tier' => 'Care',
         ]);
         PointsEngine::ensureReferralCode($customer);
+
+        AuditService::log(
+            $request->user(),
+            'customer_created',
+            "Customer created: {$customer->name}",
+            $customer,
+            ['customer_code' => $customer->customer_code],
+            $request,
+        );
 
         return response()->json([
             'message' => 'Customer created.',
@@ -87,18 +98,38 @@ class CustomerController extends Controller
         $customer->update($data);
         PointsEngine::refreshUserBalances($customer->fresh(), touchActivity: false);
 
+        AuditService::log(
+            $request->user(),
+            'customer_updated',
+            "Customer updated: {$customer->name}",
+            $customer,
+            [],
+            $request,
+        );
+
         return response()->json([
             'message' => 'Customer updated.',
             'customer' => $customer->fresh(),
         ]);
     }
 
-    public function destroy(User $customer): JsonResponse
+    public function destroy(Request $request, User $customer): JsonResponse
     {
         abort_unless($customer->isCustomer(), 404);
 
+        $name = $customer->name;
+        $code = $customer->customer_code;
         $customer->tokens()->delete();
         $customer->delete();
+
+        AuditService::log(
+            $request->user(),
+            'customer_deleted',
+            "Customer deleted: {$name}",
+            null,
+            ['customer_code' => $code],
+            $request,
+        );
 
         return response()->json(['message' => 'Customer deleted.']);
     }

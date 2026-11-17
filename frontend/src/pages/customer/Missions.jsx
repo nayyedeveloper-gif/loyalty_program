@@ -8,25 +8,50 @@ export default function CustomerMissions() {
   const { t } = useLanguage()
   const [missions, setMissions] = useState([])
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    setLoading(true)
     api
       .get('/customer/missions')
       .then((res) => setMissions(res.data.missions || []))
       .catch((err) => setError(getErrorMessage(err, t('somethingWrong'))))
+      .finally(() => setLoading(false))
   }, [t])
+
+  function statusLabel(status) {
+    if (status === 'reward_received') return t('missionRewardReceived')
+    if (status === 'ended') return t('missionEnded')
+    return t('missionInProgress')
+  }
 
   return (
     <div className="space-y-5 w-full">
       <PageHeader
+        showBack
         title={t('missions')}
         subtitle={t('missionsCopy')}
         icon={faTrophy}
-        backTo="/app"
-        backLabel={t('backToMembership')}
       />
 
-      {error && <div className="alert alert-error" role="alert">{error}</div>}
+      {error && (
+        <div className="alert alert-error" role="alert">
+          {error}
+        </div>
+      )}
+
+      {loading && (
+        <div className="loading-state" role="status" aria-live="polite">
+          {t('loading')}
+        </div>
+      )}
+
+      {!loading && !missions.length && (
+        <div className="empty-panel">
+          <p className="empty-panel-title">{t('noMissionsFound')}</p>
+          <p className="empty-panel-copy">{t('noMissionsCopy')}</p>
+        </div>
+      )}
 
       <div className="space-y-3">
         {missions.map((mission) => {
@@ -43,10 +68,18 @@ export default function CustomerMissions() {
               </div>
               <p className="type-small text-[var(--color-muted)] m-0">{mission.description}</p>
               <div className="type-meta text-[var(--color-muted)]">
-                {mission.progress} / {mission.goal_target}
-                {mission.completed ? ` · ${t('completed')}` : ''}
+                {Number(mission.progress || 0).toLocaleString()} /{' '}
+                {Number(mission.goal_target || 0).toLocaleString()}
+                {' · '}
+                {statusLabel(mission.status)}
               </div>
-              <div className="progress-track" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+              <div
+                className="progress-track"
+                role="progressbar"
+                aria-valuenow={pct}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              >
                 <div className="progress-fill" style={{ width: `${pct}%` }} />
               </div>
             </section>

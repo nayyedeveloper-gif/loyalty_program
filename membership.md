@@ -17,29 +17,28 @@
 
 ## Dual-ledger loyalty
 - **Redeemable points (wallet):** spendable balance; `1 point = 1 MMK`, redeem in increments of 100 at checkout or via rewards catalog
-- **Tier points (status):** sum of eligible earns in a **rolling 365-day window**; redemptions do not reduce tier points
+- **Tier status:** based on **lifetime purchase spend** (lakh MMK); redemptions do not change tier
 - **Activity expiry:** wallet does not expire if the member purchases or redeems within 12 months (`loyalty:expire-inactive`)
 - **Base earn:** 1 point / 10,000 MMK, then × tier multiplier (and active promotions)
 
-## Tiers (rolling tier points)
-| Tier | Min tier points (365d) | Multiplier |
-|------|------------------------|------------|
-| Bronze | 0 | 1.0x |
-| Silver | 500 | 1.2x |
-| Gold | 2,000 | 1.5x |
-| Platinum | 6,000 | 2.0x |
-| Diamond | 15,000 | 2.5x |
+## Tiers (lifetime spend)
+| Tier | Spend range | Multiplier |
+|------|-------------|------------|
+| Care | Below 300 lakh | 1.0x |
+| VIP | 300 – 500 lakh | 1.2x |
+| VVIP | 500 – 1,000 lakh | 1.5x |
+| CIP | Above 1,000 lakh | 2.0x |
 
 No automatic % bill discount. Value comes from redeeming points and tier multipliers/perks.
 
 ## Admin Panel
-- Dashboard — members, purchases, revenue, points issued, tier distribution (Bronze→Diamond)
-- Customers — Customer ID, wallet points, tier points, tier
+- Dashboard — members, purchases, revenue, points issued, tier distribution (Care→CIP)
+- Customers — Customer ID, wallet points, total spend, tier
 - Purchases — record amount + optional points redemption; updates ledger, wallet, and tier
 - Settings — branding, theme, language, profile
 
 ## Customer App
-- Membership status (wallet + 12-month tier points + multiplier)
+- Membership status (wallet + lifetime spend tier + multiplier)
 - Points activity ledger
 - Rewards catalog redemptions
 - Missions & login streaks
@@ -48,4 +47,4 @@ No automatic % bill discount. Value comes from redeeming points and tier multipl
 - Settings
 
 ## Marketing / Landing
-- Brand logo + how it works + Bronze→Diamond multipliers
+- Brand logo + how it works + Care→CIP multipliers

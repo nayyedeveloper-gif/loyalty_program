@@ -10,6 +10,7 @@ class LoyaltyTier extends Model
         'name',
         'sort_order',
         'min_tier_points',
+        'min_spend_mmk',
         'earn_multiplier',
         'perks',
     ];
@@ -18,6 +19,7 @@ class LoyaltyTier extends Model
     {
         return [
             'min_tier_points' => 'integer',
+            'min_spend_mmk' => 'integer',
             'earn_multiplier' => 'float',
             'perks' => 'array',
             'sort_order' => 'integer',

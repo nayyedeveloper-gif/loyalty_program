@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import ConfirmModal from '../../components/ConfirmModal'
 import Modal from '../../components/Modal'
 import PageHeader from '../../components/PageHeader'
 import Pagination from '../../components/Pagination'
+import { useAuth } from '../../context/AuthContext'
 import { useLanguage } from '../../context/LanguageContext'
-import api, { formatMMK, getErrorMessage } from '../../lib/api'
+import useDebouncedValue from '../../hooks/useDebouncedValue'
+import api, { downloadCsv, formatMMK, getErrorMessage } from '../../lib/api'
 import {
+  faDownload,
   faFloppyDisk,
   faMagnifyingGlass,
   faPenToSquare,
@@ -25,12 +29,14 @@ const emptyForm = {
 }
 
 export default function AdminCustomers() {
+  const { isAdmin } = useAuth()
   const { t } = useLanguage()
   const [searchParams, setSearchParams] = useSearchParams()
   const [customers, setCustomers] = useState([])
   const [meta, setMeta] = useState(null)
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
+  const debouncedSearch = useDebouncedValue(search, 300)
   const [tier, setTier] = useState(searchParams.get('tier') || '')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -39,6 +45,9 @@ export default function AdminCustomers() {
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(emptyForm)
   const [busy, setBusy] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     const nextTier = searchParams.get('tier') || ''
@@ -46,13 +55,13 @@ export default function AdminCustomers() {
     setPage(1)
   }, [searchParams])
 
-  async function load(nextPage = page) {
+  async function load(nextPage = page, query = debouncedSearch, nextTier = tier) {
     setLoading(true)
     try {
       const { data } = await api.get('/admin/customers', {
         params: {
-          search: search || undefined,
-          tier: tier || undefined,
+          search: query || undefined,
+          tier: nextTier || undefined,
           page: nextPage,
           per_page: 20,
         },
@@ -69,8 +78,8 @@ export default function AdminCustomers() {
   }
 
   useEffect(() => {
-    load(1)
-  }, [tier])
+    load(1, debouncedSearch, tier)
+  }, [debouncedSearch, tier])
 
   function openCreate() {
     setEditing(null)
@@ -122,14 +131,37 @@ export default function AdminCustomers() {
     }
   }
 
-  async function onDelete(customer) {
-    if (!confirm(t('confirmDeleteCustomer', { name: customer.name }))) return
+  async function confirmDelete() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    setError('')
     try {
-      await api.delete(`/admin/customers/${customer.id}`)
+      await api.delete(`/admin/customers/${deleteTarget.id}`)
       setMessage(t('customerDeleted'))
+      setDeleteTarget(null)
       await load()
     } catch (err) {
       setError(getErrorMessage(err, t('somethingWrong')))
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  async function onExport() {
+    if (!isAdmin) return
+    setExporting(true)
+    setError('')
+    try {
+      await downloadCsv(
+        '/admin/export/customers',
+        { search: search || undefined, tier: tier || undefined },
+        'customers.csv',
+      )
+      setMessage(t('exportStarted'))
+    } catch (err) {
+      setError(getErrorMessage(err, t('couldNotExport')))
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -143,16 +175,23 @@ export default function AdminCustomers() {
   return (
     <div className="space-y-5">
       <PageHeader
+        showBack
         title={t('customers')}
         subtitle={t('manageMembers')}
         icon={faUsers}
-        backTo="/admin"
-        backLabel={t('backToDashboard')}
         actions={(
-          <button type="button" className="btn btn-primary" onClick={openCreate}>
-            <FontAwesomeIcon icon={faPlus} aria-hidden="true" />
-            {t('addCustomer')}
-          </button>
+          <div className="action-row">
+            {isAdmin && (
+              <button type="button" className="btn btn-ghost" onClick={onExport} disabled={exporting}>
+                <FontAwesomeIcon icon={faDownload} aria-hidden="true" />
+                {exporting ? t('exporting') : t('exportCsv')}
+              </button>
+            )}
+            <button type="button" className="btn btn-primary" onClick={openCreate}>
+              <FontAwesomeIcon icon={faPlus} aria-hidden="true" />
+              {t('addCustomer')}
+            </button>
+          </div>
         )}
       />
 
@@ -173,6 +212,7 @@ export default function AdminCustomers() {
           placeholder={t('searchCustomersPlaceholder')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          autoComplete="off"
         />
         <label className="sr-only" htmlFor="customer-tier">{t('tier')}</label>
         <select
@@ -186,7 +226,7 @@ export default function AdminCustomers() {
           }}
         >
           <option value="">{t('allTiers')}</option>
-          {['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond'].map((tierName) => (
+          {['Care', 'VIP', 'VVIP', 'CIP'].map((tierName) => (
             <option key={tierName} value={tierName}>{t(tierName)}</option>
           ))}
         </select>
@@ -203,6 +243,7 @@ export default function AdminCustomers() {
               <th scope="col">{t('customerId')}</th>
               <th scope="col">{t('name')}</th>
               <th scope="col">{t('phone')}</th>
+              <th scope="col" className="hide-mobile">{t('nrcNumber')}</th>
               <th scope="col" className="hide-mobile">{t('address')}</th>
               <th scope="col">{t('totalSpent')}</th>
               <th scope="col">{t('redeemablePoints')}</th>
@@ -214,7 +255,7 @@ export default function AdminCustomers() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={9} className="loading-state" role="status" aria-live="polite">{t('loading')}</td>
+                <td colSpan={10} className="loading-state" role="status" aria-live="polite">{t('loading')}</td>
               </tr>
             )}
             {!loading && customers.map((c) => (
@@ -225,6 +266,7 @@ export default function AdminCustomers() {
                   <div className="type-meta text-[var(--color-muted)]">{c.email}</div>
                 </td>
                 <td data-label={t('phone')}>{c.phone}</td>
+                <td data-label={t('nrcNumber')} className="hide-mobile type-meta">{c.nrc_number || '—'}</td>
                 <td data-label={t('address')} className="hide-mobile">{c.address || '—'}</td>
                 <td data-label={t('totalSpent')}>{formatMMK(c.total_spent)}</td>
                 <td data-label={t('redeemablePoints')}>{Number(c.redeemable_points ?? c.points ?? 0).toLocaleString()}</td>
@@ -241,15 +283,17 @@ export default function AdminCustomers() {
                       <FontAwesomeIcon icon={faPenToSquare} aria-hidden="true" />
                       <span className="btn-tooltip">{t('edit')}</span>
                     </button>
-                    <button
-                      type="button"
-                      className="btn btn-danger btn-icon-action"
-                      onClick={() => onDelete(c)}
-                      aria-label={t('delete')}
-                    >
-                      <FontAwesomeIcon icon={faTrash} aria-hidden="true" />
-                      <span className="btn-tooltip">{t('delete')}</span>
-                    </button>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-icon-action"
+                        onClick={() => setDeleteTarget(c)}
+                        aria-label={t('delete')}
+                      >
+                        <FontAwesomeIcon icon={faTrash} aria-hidden="true" />
+                        <span className="btn-tooltip">{t('delete')}</span>
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -264,6 +308,15 @@ export default function AdminCustomers() {
       </div>
 
       <Pagination meta={meta} onPageChange={(next) => load(next)} />
+
+      <ConfirmModal
+        open={!!deleteTarget}
+        title={t('confirmDeleteTitle')}
+        message={t('confirmDeleteCustomer', { name: deleteTarget?.name || '' })}
+        busy={deleting}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+      />
 
       <Modal
         open={modalOpen}

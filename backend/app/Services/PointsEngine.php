@@ -25,11 +25,15 @@ class PointsEngine
         return intdiv(max(0, $amountMmK), $divisor);
     }
 
-    public static function activePromoMultiplier(?string $productType = null, ?Carbon $at = null): float
+    public static function activePromoMultiplier(?string $productType = null, ?Carbon $at = null, ?User $customer = null): float
     {
         $at = $at ?: now();
         $best = 1.0;
+        $isBirthday = $customer?->date_of_birth
+            && (int) $customer->date_of_birth->month === (int) $at->month
+            && (int) $customer->date_of_birth->day === (int) $at->day;
 
+        // Multiple active promotions are allowed; earn uses the highest matching multiplier.
         $promos = Promotion::query()->where('is_active', true)->get();
         foreach ($promos as $promo) {
             if ($promo->starts_at && $at->lt($promo->starts_at)) {
@@ -39,6 +43,9 @@ class PointsEngine
                 continue;
             }
             if ($promo->weekends_only && ! $at->isWeekend()) {
+                continue;
+            }
+            if ($promo->birthdays_only && ! $isBirthday) {
                 continue;
             }
             if (is_array($promo->product_types) && count($promo->product_types) > 0) {
@@ -55,8 +62,8 @@ class PointsEngine
     public static function computePurchaseEarn(User $customer, int $amountMmK, ?string $productType = null): array
     {
         $base = self::basePointsFromAmount($amountMmK);
-        $tierMultiplier = TierService::multiplierForTier($customer->tier ?? 'Bronze');
-        $promoMultiplier = self::activePromoMultiplier($productType);
+        $tierMultiplier = TierService::multiplierForTier($customer->tier ?? 'Care');
+        $promoMultiplier = self::activePromoMultiplier($productType, null, $customer);
         $points = (int) floor($base * $tierMultiplier * $promoMultiplier);
 
         return [
@@ -140,10 +147,12 @@ class PointsEngine
             ->where('created_at', '>=', $windowStart)
             ->sum('points');
 
+        $previousTier = (string) ($user->tier ?: 'Care');
+
         $user->redeemable_points = max(0, $wallet);
         $user->points = max(0, $wallet); // legacy mirror
         $user->tier_points_365d = max(0, $tierPoints);
-        $user->tier = TierService::tierForPoints((int) $user->tier_points_365d);
+        $user->tier = TierService::tierForSpend((int) $user->total_spent);
 
         if ($touchActivity) {
             $user->last_activity_at = now();
@@ -151,7 +160,17 @@ class PointsEngine
 
         $user->save();
 
-        return $user->fresh();
+        $fresh = $user->fresh();
+        if ($fresh && $previousTier !== (string) $fresh->tier) {
+            $ordered = TierService::tiers()->pluck('name')->values();
+            $prevIndex = $ordered->search($previousTier);
+            $nextIndex = $ordered->search($fresh->tier);
+            if ($prevIndex !== false && $nextIndex !== false && $nextIndex > $prevIndex) {
+                NotificationService::tierUpgraded($fresh, $previousTier, (string) $fresh->tier);
+            }
+        }
+
+        return $fresh;
     }
 
     public static function reversePurchaseLedger(Purchase $purchase): void
@@ -191,6 +210,8 @@ class PointsEngine
         int $earnPoints,
         int $redeemPoints,
         array $earnMeta = [],
+        ?Carbon $at = null,
+        bool $notifyTierChange = true,
     ): void {
         if ($earnPoints > 0) {
             self::writeLedger(
@@ -201,6 +222,7 @@ class PointsEngine
                 tierEligible: true,
                 purchaseId: $purchase->id,
                 meta: $earnMeta,
+                createdAt: $at,
             );
         }
 
@@ -213,7 +235,29 @@ class PointsEngine
                 tierEligible: false,
                 purchaseId: $purchase->id,
                 meta: ['offset_mmk' => $purchase->amount_offset_mmk],
+                createdAt: $at,
             );
+        }
+
+        if (! $notifyTierChange) {
+            $wallet = (int) PointLedger::where('user_id', $customer->id)->sum('points');
+            $windowStart = ($at ?: now())->copy()->subDays(365);
+            $tierPoints = (int) PointLedger::where('user_id', $customer->id)
+                ->where('tier_eligible', true)
+                ->where('points', '>', 0)
+                ->where('created_at', '>=', $windowStart)
+                ->sum('points');
+
+            $customer->redeemable_points = max(0, $wallet);
+            $customer->points = max(0, $wallet);
+            $customer->tier_points_365d = max(0, $tierPoints);
+            $customer->tier = TierService::tierForSpend((int) $customer->total_spent);
+            if ($at) {
+                $customer->last_activity_at = $at;
+            }
+            $customer->save();
+
+            return;
         }
 
         self::refreshUserBalances($customer, touchActivity: true);
@@ -228,6 +272,44 @@ class PointsEngine
             points: $points,
             tierEligible: $tierEligible,
             meta: $meta,
+        );
+        self::refreshUserBalances($user, touchActivity: true);
+
+        return $entry;
+    }
+
+    public static function adjustPoints(
+        User $user,
+        int $points,
+        string $reason,
+        bool $tierEligible = false,
+        ?int $adminId = null,
+    ): PointLedger {
+        if ($points === 0) {
+            throw ValidationException::withMessages(['points' => ['Adjustment points cannot be zero.']]);
+        }
+
+        $reason = trim($reason);
+        if ($reason === '') {
+            throw ValidationException::withMessages(['reason' => ['A reason is required for point adjustments.']]);
+        }
+
+        if ($points < 0 && abs($points) > (int) $user->redeemable_points) {
+            throw ValidationException::withMessages([
+                'points' => ['Cannot deduct more than the customer redeemable balance.'],
+            ]);
+        }
+
+        $entry = self::writeLedger(
+            user: $user,
+            type: 'adjust',
+            source: 'admin',
+            points: $points,
+            tierEligible: $points > 0 && $tierEligible,
+            meta: [
+                'reason' => $reason,
+                'admin_id' => $adminId,
+            ],
         );
         self::refreshUserBalances($user, touchActivity: true);
 
@@ -250,6 +332,31 @@ class PointsEngine
             points: -1 * $pointsCost,
             tierEligible: false,
             meta: $meta,
+        );
+        self::refreshUserBalances($user, touchActivity: true);
+
+        return $entry;
+    }
+
+    public static function refundCatalogRedemption(User $user, PointLedger $redeemEntry, array $meta = []): PointLedger
+    {
+        if ($redeemEntry->type !== 'redeem' || (int) $redeemEntry->points >= 0) {
+            throw ValidationException::withMessages(['redemption' => ['Invalid redemption ledger entry.']]);
+        }
+
+        $already = PointLedger::where('related_ledger_id', $redeemEntry->id)->where('type', 'reverse')->exists();
+        if ($already) {
+            throw ValidationException::withMessages(['redemption' => ['This redemption was already refunded.']]);
+        }
+
+        $entry = self::writeLedger(
+            user: $user,
+            type: 'reverse',
+            source: 'catalog',
+            points: -1 * (int) $redeemEntry->points,
+            tierEligible: false,
+            meta: array_merge(['reverses_ledger_id' => $redeemEntry->id], $meta),
+            relatedLedgerId: $redeemEntry->id,
         );
         self::refreshUserBalances($user, touchActivity: true);
 
@@ -285,6 +392,7 @@ class PointsEngine
                             meta: ['reason' => 'inactivity'],
                         );
                         self::refreshUserBalances($user, touchActivity: false);
+                        NotificationService::pointsExpired($user->fresh(), $balance);
                         $expiredCount++;
                     });
                 }

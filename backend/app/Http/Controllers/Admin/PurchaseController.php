@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\IdempotencyKey;
 use App\Models\Purchase;
 use App\Models\User;
+use App\Services\AuditService;
 use App\Services\MissionService;
+use App\Services\NotificationService;
 use App\Services\PointsEngine;
 use App\Services\SpinGrantService;
 use Illuminate\Http\JsonResponse;
@@ -23,10 +26,13 @@ class PurchaseController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('product_name', 'like', "%{$search}%")
                     ->orWhere('product_code', 'like', "%{$search}%")
+                    ->orWhere('voucher_number', 'like', "%{$search}%")
+                    ->orWhere('branch_name', 'like', "%{$search}%")
                     ->orWhereHas('user', function ($uq) use ($search) {
                         $uq->where('name', 'like', "%{$search}%")
                             ->orWhere('phone', 'like', "%{$search}%")
-                            ->orWhere('customer_code', 'like', "%{$search}%");
+                            ->orWhere('customer_code', 'like', "%{$search}%")
+                            ->orWhere('nrc_number', 'like', "%{$search}%");
                     });
             });
         }
@@ -41,6 +47,17 @@ class PurchaseController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        $idempotencyKey = trim((string) $request->header('Idempotency-Key', ''));
+        if ($idempotencyKey !== '') {
+            $existing = IdempotencyKey::query()
+                ->where('user_id', $request->user()->id)
+                ->where('key', $idempotencyKey)
+                ->first();
+            if ($existing) {
+                return response()->json($existing->response_body, $existing->status_code);
+            }
+        }
+
         $data = $this->validated($request);
 
         $grantSpins = (int) ($data['grant_spins'] ?? 0);
@@ -53,6 +70,14 @@ class PurchaseController extends Controller
             $payable = $amount - $redeem['offset_mmk'];
 
             $earn = PointsEngine::computePurchaseEarn($customer, $payable, $data['product_type']);
+            $snapshot = [
+                'base_points' => $earn['base_points'],
+                'tier_multiplier' => $earn['tier_multiplier'],
+                'promo_multiplier' => $earn['promo_multiplier'],
+                'points_earned' => $earn['points'],
+                'tier_at_purchase' => $customer->tier,
+                'payable' => $payable,
+            ];
 
             $purchase = Purchase::create([
                 'user_id' => $customer->id,
@@ -65,6 +90,7 @@ class PurchaseController extends Controller
                 'points_earned' => $earn['points'],
                 'points_redeemed' => $redeem['points'],
                 'amount_offset_mmk' => $redeem['offset_mmk'],
+                'earn_snapshot' => $snapshot,
                 'payment_method' => $data['payment_method'],
             ]);
 
@@ -86,9 +112,14 @@ class PurchaseController extends Controller
 
             MissionService::recordPurchase($customer->fresh(), $payable);
 
+            $freshCustomer = $customer->fresh();
+            if ($earn['points'] > 0) {
+                NotificationService::pointsEarned($freshCustomer, $earn['points'], 'purchase');
+            }
+
             if ($grantSpins > 0) {
                 app(SpinGrantService::class)->grant(
-                    user: $customer->fresh(),
+                    user: $freshCustomer,
                     count: $grantSpins,
                     source: 'purchase',
                     actorId: $request->user()?->id,
@@ -98,10 +129,31 @@ class PurchaseController extends Controller
             return $purchase->load('user:id,name,email,phone,tier,points,redeemable_points,tier_points_365d,total_spent');
         });
 
-        return response()->json([
+        $payload = [
             'message' => 'Purchase recorded.',
             'purchase' => $purchase,
-        ], 201);
+        ];
+
+        AuditService::log(
+            $request->user(),
+            'purchase_created',
+            "Purchase recorded: {$purchase->product_name} (PUR-{$purchase->id})",
+            $purchase,
+            ['amount' => $purchase->amount, 'points_earned' => $purchase->points_earned],
+            $request,
+        );
+
+        if ($idempotencyKey !== '') {
+            IdempotencyKey::create([
+                'user_id' => $request->user()->id,
+                'key' => $idempotencyKey,
+                'route' => 'admin.purchases.store',
+                'status_code' => 201,
+                'response_body' => json_decode(json_encode($payload), true),
+            ]);
+        }
+
+        return response()->json($payload, 201);
     }
 
     public function show(Purchase $purchase): JsonResponse
@@ -111,8 +163,63 @@ class PurchaseController extends Controller
         ]);
     }
 
+    public function cancel(Request $request, Purchase $purchase): JsonResponse
+    {
+        if ($purchase->isCancelled()) {
+            return response()->json([
+                'message' => 'Purchase already cancelled.',
+                'purchase' => $purchase->load('user:id,customer_code,name,email,phone,tier,redeemable_points'),
+            ]);
+        }
+
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'max:255'],
+        ]);
+
+        $purchase = DB::transaction(function () use ($purchase, $data) {
+            PointsEngine::reversePurchaseLedger($purchase);
+
+            $customer = User::lockForUpdate()->find($purchase->user_id);
+            if ($customer) {
+                $customer->total_spent = max(0, $customer->total_spent - $purchase->net_amount);
+                $customer->save();
+                PointsEngine::refreshUserBalances($customer, touchActivity: false);
+            }
+
+            $purchase->update([
+                'status' => 'cancelled',
+                'cancel_reason' => $data['reason'],
+                'cancelled_at' => now(),
+            ]);
+
+            if ($customer) {
+                NotificationService::purchaseCancelled($customer->fresh(), (int) $purchase->id);
+            }
+
+            return $purchase->fresh()->load('user:id,customer_code,name,email,phone,tier,redeemable_points,tier_points_365d,total_spent');
+        });
+
+        AuditService::log(
+            $request->user(),
+            'purchase_cancelled',
+            "Purchase cancelled: PUR-{$purchase->id}",
+            $purchase,
+            ['reason' => $data['reason']],
+            $request,
+        );
+
+        return response()->json([
+            'message' => 'Purchase cancelled.',
+            'purchase' => $purchase,
+        ]);
+    }
+
     public function update(Request $request, Purchase $purchase): JsonResponse
     {
+        if ($purchase->isCancelled()) {
+            return response()->json(['message' => 'Cancelled purchases cannot be edited.'], 422);
+        }
+
         $data = $this->validated($request, updating: true);
 
         $purchase = DB::transaction(function () use ($data, $purchase) {
@@ -130,6 +237,14 @@ class PurchaseController extends Controller
             $redeem = PointsEngine::validateRedeemAmount($customer, $redeemPoints, $amount);
             $payable = $amount - $redeem['offset_mmk'];
             $earn = PointsEngine::computePurchaseEarn($customer, $payable, $productType);
+            $snapshot = [
+                'base_points' => $earn['base_points'],
+                'tier_multiplier' => $earn['tier_multiplier'],
+                'promo_multiplier' => $earn['promo_multiplier'],
+                'points_earned' => $earn['points'],
+                'tier_at_purchase' => $customer->tier,
+                'payable' => $payable,
+            ];
 
             $purchase->update([
                 'user_id' => $customer->id,
@@ -142,6 +257,7 @@ class PurchaseController extends Controller
                 'points_earned' => $earn['points'],
                 'points_redeemed' => $redeem['points'],
                 'amount_offset_mmk' => $redeem['offset_mmk'],
+                'earn_snapshot' => $snapshot,
                 'payment_method' => $data['payment_method'] ?? $purchase->payment_method,
             ]);
 
@@ -175,18 +291,21 @@ class PurchaseController extends Controller
 
     public function destroy(Purchase $purchase): JsonResponse
     {
-        DB::transaction(function () use ($purchase) {
-            PointsEngine::reversePurchaseLedger($purchase);
+        // Prefer cancel() for shop operations; destroy remains for hard cleanup only.
+        if (! $purchase->isCancelled()) {
+            DB::transaction(function () use ($purchase) {
+                PointsEngine::reversePurchaseLedger($purchase);
 
-            $customer = User::find($purchase->user_id);
-            if ($customer) {
-                $customer->total_spent = max(0, $customer->total_spent - $purchase->net_amount);
-                $customer->save();
-                PointsEngine::refreshUserBalances($customer, touchActivity: false);
-            }
+                $customer = User::find($purchase->user_id);
+                if ($customer) {
+                    $customer->total_spent = max(0, $customer->total_spent - $purchase->net_amount);
+                    $customer->save();
+                    PointsEngine::refreshUserBalances($customer, touchActivity: false);
+                }
+            });
+        }
 
-            $purchase->delete();
-        });
+        $purchase->delete();
 
         return response()->json(['message' => 'Purchase deleted.']);
     }

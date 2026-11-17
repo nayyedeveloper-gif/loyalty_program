@@ -7,10 +7,12 @@ use App\Models\LoyaltySetting;
 use App\Models\Mission;
 use App\Models\PointLedger;
 use App\Models\ProductReview;
+use App\Models\Purchase;
 use App\Models\RewardItem;
 use App\Models\RewardRedemption;
 use App\Models\User;
 use App\Models\UserMissionProgress;
+use App\Services\NotificationService;
 use App\Services\PointsEngine;
 use App\Services\TierService;
 use Illuminate\Http\JsonResponse;
@@ -61,12 +63,27 @@ class MembershipController extends Controller
         return response()->json(['purchases' => $purchases]);
     }
 
+    public function showPurchase(Request $request, Purchase $purchase): JsonResponse
+    {
+        if ((int) $purchase->user_id !== (int) $request->user()->id) {
+            abort(404);
+        }
+
+        return response()->json(['purchase' => $purchase]);
+    }
+
     public function ledger(Request $request): JsonResponse
     {
-        $entries = PointLedger::where('user_id', $request->user()->id)
-            ->where('type', 'redeem')
-            ->latest()
-            ->paginate(20);
+        $query = PointLedger::where('user_id', $request->user()->id)->latest();
+
+        $type = trim((string) $request->string('type'));
+        if ($type === 'adjustments') {
+            $query->whereIn('type', ['adjust', 'reverse']);
+        } elseif (in_array($type, ['earn', 'redeem', 'bonus', 'adjust', 'expire', 'reverse'], true)) {
+            $query->where('type', $type);
+        }
+
+        $entries = $query->paginate((int) $request->integer('per_page', 20));
 
         return response()->json(['ledger' => $entries]);
     }
@@ -121,32 +138,124 @@ class MembershipController extends Controller
                 $item->save();
             }
 
-            return RewardRedemption::create([
+            do {
+                $code = '29G-'.strtoupper(substr(bin2hex(random_bytes(4)), 0, 6));
+            } while (RewardRedemption::where('redemption_code', $code)->exists());
+
+            $instant = $item->isInstant();
+            $redemption = RewardRedemption::create([
                 'user_id' => $user->id,
                 'reward_item_id' => $item->id,
                 'ledger_id' => $ledger->id,
                 'points_spent' => $item->points_cost,
-                'status' => 'fulfilled',
+                'redemption_code' => $code,
+                'status' => $instant ? 'collected' : 'pending',
+                'collected_at' => $instant ? now() : null,
             ])->load('rewardItem');
+
+            NotificationService::rewardRedeemed($user->fresh(), (string) $item->name, $code);
+
+            return $redemption;
         });
 
+        $instant = $redemption->rewardItem?->isInstant() ?? false;
+
         return response()->json([
-            'message' => 'Reward redeemed.',
+            'message' => $instant ? 'Reward redeemed and delivered.' : 'Reward redeemed. Present your code in store to collect.',
             'redemption' => $redemption,
             'user' => $request->user()->fresh(),
         ]);
+    }
+
+    public function cancelRedemption(Request $request, RewardRedemption $redemption): JsonResponse
+    {
+        if ((int) $redemption->user_id !== (int) $request->user()->id) {
+            abort(404);
+        }
+
+        $redemption->loadMissing('rewardItem');
+
+        // Instant/digital rewards are delivered immediately — never cancellable.
+        if ($redemption->rewardItem?->isInstant() || $redemption->status !== 'pending') {
+            throw ValidationException::withMessages([
+                'redemption' => ['Only ready-to-collect (in-store pickup) rewards can be cancelled.'],
+            ]);
+        }
+
+        $redemption = DB::transaction(function () use ($request, $redemption) {
+            $user = User::where('id', $request->user()->id)->lockForUpdate()->firstOrFail();
+            $redemption = RewardRedemption::where('id', $redemption->id)->lockForUpdate()->firstOrFail();
+            $redemption->load('rewardItem');
+
+            if ($redemption->rewardItem?->isInstant() || $redemption->status !== 'pending') {
+                throw ValidationException::withMessages([
+                    'redemption' => ['Only ready-to-collect (in-store pickup) rewards can be cancelled.'],
+                ]);
+            }
+
+            if ($redemption->ledger_id) {
+                $ledger = PointLedger::find($redemption->ledger_id);
+                if ($ledger) {
+                    PointsEngine::refundCatalogRedemption($user, $ledger, [
+                        'redemption_id' => $redemption->id,
+                        'reason' => 'customer_cancelled',
+                    ]);
+                }
+            }
+
+            $item = RewardItem::where('id', $redemption->reward_item_id)->lockForUpdate()->first();
+            if ($item && $item->stock !== null) {
+                $item->stock += 1;
+                $item->save();
+            }
+
+            $redemption->status = 'cancelled';
+            $redemption->collected_at = null;
+            $redemption->save();
+
+            return $redemption->fresh()->load('rewardItem');
+        });
+
+        return response()->json([
+            'message' => 'Redemption cancelled. Points were refunded.',
+            'redemption' => $redemption,
+            'user' => $request->user()->fresh(),
+        ]);
+    }
+
+    public function redemptions(Request $request): JsonResponse
+    {
+        $redemptions = RewardRedemption::query()
+            ->with('rewardItem:id,name,category,fulfillment,points_cost')
+            ->where('user_id', $request->user()->id)
+            ->latest()
+            ->paginate(20);
+
+        return response()->json(['redemptions' => $redemptions]);
     }
 
     public function missions(Request $request): JsonResponse
     {
         $missions = Mission::query()
             ->where('is_active', true)
+            ->where(function ($q) {
+                $q->whereNull('starts_at')->orWhere('starts_at', '<=', now());
+            })
             ->orderBy('id')
             ->get()
             ->map(function (Mission $mission) use ($request) {
                 $progress = UserMissionProgress::where('user_id', $request->user()->id)
                     ->where('mission_id', $mission->id)
                     ->first();
+
+                $completed = (bool) ($progress?->completed ?? false);
+                $ended = $mission->ends_at && $mission->ends_at->isPast();
+                $status = 'in_progress';
+                if ($completed) {
+                    $status = 'reward_received';
+                } elseif ($ended) {
+                    $status = 'ended';
+                }
 
                 return [
                     'id' => $mission->id,
@@ -159,7 +268,8 @@ class MembershipController extends Controller
                     'starts_at' => optional($mission->starts_at)?->toIso8601String(),
                     'ends_at' => optional($mission->ends_at)?->toIso8601String(),
                     'progress' => $progress?->progress ?? 0,
-                    'completed' => (bool) ($progress?->completed ?? false),
+                    'completed' => $completed,
+                    'status' => $status,
                 ];
             });
 

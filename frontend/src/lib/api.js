@@ -1,7 +1,15 @@
-const API_BASE = '/api'
+const API_BASE = (import.meta.env.VITE_API_BASE || '/api').replace(/\/$/, '')
+const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN || '').replace(/\/$/, '')
+
+function isAbsoluteUrl(value) {
+  return /^https?:\/\//i.test(value)
+}
 
 function buildUrl(path, params) {
-  const url = new URL(`${API_BASE}${path}`, window.location.origin)
+  const url = isAbsoluteUrl(API_BASE)
+    ? new URL(`${API_BASE}${path}`)
+    : new URL(`${API_BASE}${path}`, window.location.origin)
+
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
@@ -9,7 +17,24 @@ function buildUrl(path, params) {
       }
     })
   }
+
+  if (isAbsoluteUrl(API_BASE)) {
+    return url.toString()
+  }
+
   return url.toString().replace(window.location.origin, '')
+}
+
+/** Resolve relative /storage and /api media paths for native Capacitor builds. */
+export function mediaUrl(path) {
+  if (!path) return ''
+  if (isAbsoluteUrl(path) || path.startsWith('blob:') || path.startsWith('data:')) {
+    return path
+  }
+  if (API_ORIGIN) {
+    return `${API_ORIGIN}${path.startsWith('/') ? path : `/${path}`}`
+  }
+  return path
 }
 
 async function request(method, path, { params, body, headers } = {}) {
@@ -111,4 +136,41 @@ export function getErrorMessage(error, fallback = 'Something went wrong.') {
     error?.message ||
     fallback
   )
+}
+
+export async function downloadCsv(path, params = {}, fallbackName = 'export.csv') {
+  const token = localStorage.getItem('token')
+  const response = await fetch(buildUrl(path, params), {
+    method: 'GET',
+    headers: {
+      Accept: 'text/csv',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  })
+
+  if (!response.ok) {
+    let message = `Export failed (${response.status})`
+    try {
+      const data = await response.json()
+      message = data?.message || message
+    } catch {
+      // ignore non-json error bodies
+    }
+    const error = new Error(message)
+    error.response = { status: response.status }
+    throw error
+  }
+
+  const blob = await response.blob()
+  const disposition = response.headers.get('Content-Disposition') || ''
+  const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i)
+  const filename = match ? match[1].replace(/['"]/g, '') : fallbackName
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
 }

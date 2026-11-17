@@ -2,9 +2,15 @@ import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLanguage } from '../context/LanguageContext'
 
-export default function ProtectedRoute({ role }) {
+function homeForRole(role) {
+  if (role === 'admin' || role === 'staff') return '/admin'
+  return '/app'
+}
+
+export default function ProtectedRoute({ role, roles }) {
   const { user, loading } = useAuth()
   const { t } = useLanguage()
+  const allowed = roles || (role ? [role] : null)
 
   if (loading) {
     return (
@@ -16,8 +22,8 @@ export default function ProtectedRoute({ role }) {
 
   if (!user) return <Navigate to="/signin" replace />
 
-  if (role && user.role !== role) {
-    return <Navigate to={user.role === 'admin' ? '/admin' : '/app'} replace />
+  if (allowed && !allowed.includes(user.role)) {
+    return <Navigate to={homeForRole(user.role)} replace />
   }
 
   return <Outlet />

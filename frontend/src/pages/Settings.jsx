@@ -4,8 +4,9 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { useAppSettings } from '../context/AppSettingsContext'
 import { useAuth } from '../context/AuthContext'
 import { useLanguage } from '../context/LanguageContext'
+import ConfirmModal from '../components/ConfirmModal'
 import ThemeSwitcher from '../components/ThemeSwitcher'
-import api, { getErrorMessage } from '../lib/api'
+import api, { getErrorMessage, mediaUrl } from '../lib/api'
 import {
   faBuilding,
   faCamera,
@@ -13,32 +14,63 @@ import {
   faChevronRight,
   faCircleInfo,
   faCircleQuestion,
+  faEnvelope,
   faFloppyDisk,
-  faGear,
+  faHeadset,
+  faKey,
   faLock,
   faPenToSquare,
-  faPhone,
   faRightFromBracket,
-  faShieldHalved,
-  faSun,
   faTrash,
   faUser,
 } from '../lib/icons'
 
-const DETAIL_SECTIONS = ['profile', 'appearance', 'language', 'password', 'about', 'branding']
+const DETAIL_SECTIONS = ['profile', 'password', 'about', 'faq', 'branding']
 
-function SettingsRow({ icon, label, hint, onClick, to, danger = false, showChevron = true }) {
-  const className = `settings-list-row ${danger ? 'is-danger' : ''}`
+function DetailShell({ title, children, error, message, onBack, backLabel }) {
+  return (
+    <div className="space-y-5 w-full settings-hub">
+      <header className="settings-hub-header">
+        <button type="button" className="settings-hub-back" onClick={onBack} aria-label={backLabel}>
+          <FontAwesomeIcon icon={faChevronLeft} aria-hidden="true" />
+        </button>
+        <h1 className="settings-hub-title">{title}</h1>
+        <span className="settings-hub-spacer" aria-hidden="true" />
+      </header>
+      {error && <div className="alert alert-error" role="alert">{error}</div>}
+      {message && <div className="alert alert-ok" role="status" aria-live="polite">{message}</div>}
+      <div className="settings-detail-body">{children}</div>
+    </div>
+  )
+}
+
+function SettingsRow({
+  icon,
+  label,
+  hint,
+  onClick,
+  to,
+  href,
+  danger = false,
+  showChevron = true,
+  trailing = null,
+}) {
+  const className = `settings-list-row ${danger ? 'is-danger' : ''} ${trailing ? 'has-trailing' : ''}`
   const content = (
     <>
-      <span className="settings-list-icon" aria-hidden="true">
-        <FontAwesomeIcon icon={icon} />
-      </span>
+      {icon ? (
+        <span className="settings-list-icon" aria-hidden="true">
+          <FontAwesomeIcon icon={icon} />
+        </span>
+      ) : null}
       <span className="settings-list-copy">
         <span className="settings-list-label">{label}</span>
         {hint ? <span className="settings-list-hint">{hint}</span> : null}
       </span>
-      {showChevron ? <FontAwesomeIcon icon={faChevronRight} className="settings-list-chevron" aria-hidden="true" /> : null}
+      {trailing}
+      {!trailing && showChevron ? (
+        <FontAwesomeIcon icon={faChevronRight} className="settings-list-chevron" aria-hidden="true" />
+      ) : null}
     </>
   )
 
@@ -47,6 +79,14 @@ function SettingsRow({ icon, label, hint, onClick, to, danger = false, showChevr
       <Link to={to} className={className}>
         {content}
       </Link>
+    )
+  }
+
+  if (href) {
+    return (
+      <a href={href} className={className}>
+        {content}
+      </a>
     )
   }
 
@@ -60,24 +100,27 @@ function SettingsRow({ icon, label, hint, onClick, to, danger = false, showChevr
 export default function Settings() {
   const { section } = useParams()
   const navigate = useNavigate()
-  const { user, setUser, isAdmin, logout } = useAuth()
+  const { user, setUser, isAdmin, isStaff, logout } = useAuth()
   const { t, lang, setLang } = useLanguage()
   const { appName, appTagline, appLogoUrl, updateSettings, uploadLogo, removeLogo } = useAppSettings()
   const fileRef = useRef(null)
   const logoRef = useRef(null)
   const avatarMenuRef = useRef(null)
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false)
-  const basePath = user?.role === 'admin' ? '/admin/settings' : '/app/settings'
-  const helpPath = user?.role === 'admin' ? '/admin/help' : '/app/help'
+  const isPortal = isAdmin || isStaff
+  const basePath = isPortal ? '/admin/settings' : '/app/settings'
+  const helpPath = isAdmin ? '/admin/help' : '/app/help'
 
   const [profile, setProfile] = useState({
     name: user?.name || '',
     phone: user?.phone || '',
     address: user?.address || '',
+    date_of_birth: user?.date_of_birth ? String(user.date_of_birth).slice(0, 10) : '',
   })
   const [prefs, setPrefs] = useState({
     email_notifications: user?.preferences?.email_notifications ?? true,
     purchase_alerts: user?.preferences?.purchase_alerts ?? true,
+    in_app_notifications: user?.preferences?.in_app_notifications ?? true,
   })
   const [appForm, setAppForm] = useState({
     app_name: appName,
@@ -88,21 +131,36 @@ export default function Settings() {
     password: '',
     password_confirmation: '',
   })
+  const [faqs, setFaqs] = useState([])
+  const [faqsLoading, setFaqsLoading] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState('')
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false)
 
+  // Sync from server user only when saved values change — not on every render.
   useEffect(() => {
     setProfile({
       name: user?.name || '',
       phone: user?.phone || '',
       address: user?.address || '',
+      date_of_birth: user?.date_of_birth ? String(user.date_of_birth).slice(0, 10) : '',
     })
     setPrefs({
       email_notifications: user?.preferences?.email_notifications ?? true,
       purchase_alerts: user?.preferences?.purchase_alerts ?? true,
+      in_app_notifications: user?.preferences?.in_app_notifications ?? true,
     })
-  }, [user])
+  }, [
+    user?.id,
+    user?.name,
+    user?.phone,
+    user?.address,
+    user?.date_of_birth,
+    user?.preferences?.email_notifications,
+    user?.preferences?.purchase_alerts,
+    user?.preferences?.in_app_notifications,
+  ])
 
   useEffect(() => {
     setAppForm({
@@ -132,6 +190,29 @@ export default function Settings() {
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [avatarMenuOpen])
+
+  useEffect(() => {
+    if (section !== 'faq') return undefined
+    let cancelled = false
+    setFaqsLoading(true)
+    api
+      .get('/faqs')
+      .then(({ data }) => {
+        if (!cancelled) {
+          setFaqs(data.faqs || [])
+          setError('')
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setError(getErrorMessage(err, t('somethingWrong')))
+      })
+      .finally(() => {
+        if (!cancelled) setFaqsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [section, t])
 
   const allowed = ['general', ...DETAIL_SECTIONS]
   if (!allowed.includes(section) || (section === 'branding' && !isAdmin)) {
@@ -264,6 +345,21 @@ export default function Settings() {
     }
   }
 
+  async function confirmDeleteAccount() {
+    setBusy('delete')
+    setError('')
+    setMessage('')
+    try {
+      await api.delete('/settings/account')
+      setDeleteAccountOpen(false)
+      await logout()
+      navigate('/signin')
+    } catch (err) {
+      setError(getErrorMessage(err, t('couldNotDeleteAccount')))
+      setBusy('')
+    }
+  }
+
   async function onLogout() {
     await logout()
     navigate('/signin')
@@ -276,86 +372,147 @@ export default function Settings() {
     .slice(0, 2)
     .toUpperCase()
 
-  function DetailShell({ title, children }) {
+  const avatarMenu = (
+    <div className="settings-profile-avatar-wrap" ref={avatarMenuRef}>
+      <div className="settings-profile-avatar" aria-hidden="true">
+        {user?.avatar_url ? <img src={mediaUrl(user.avatar_url)} alt="" /> : <span>{initials}</span>}
+      </div>
+      <button
+        type="button"
+        className="settings-profile-edit-btn"
+        aria-label={t('edit')}
+        aria-haspopup="menu"
+        aria-expanded={avatarMenuOpen}
+        disabled={busy === 'avatar'}
+        onClick={() => setAvatarMenuOpen((open) => !open)}
+      >
+        <FontAwesomeIcon icon={faPenToSquare} aria-hidden="true" />
+      </button>
+      {avatarMenuOpen && (
+        <div className="settings-profile-avatar-menu" role="menu">
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setAvatarMenuOpen(false)
+              fileRef.current?.click()
+            }}
+          >
+            {t('uploadPhoto')}
+          </button>
+          {user?.avatar_url ? (
+            <button
+              type="button"
+              role="menuitem"
+              className="is-danger"
+              onClick={() => {
+                setAvatarMenuOpen(false)
+                onRemoveAvatar()
+              }}
+            >
+              {t('removePhoto')}
+            </button>
+          ) : null}
+        </div>
+      )}
+      <input
+        ref={fileRef}
+        id="settings-avatar-input"
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="sr-only"
+        onChange={onAvatarSelected}
+      />
+    </div>
+  )
+
+  if (section === 'general') {
     return (
       <div className="space-y-5 w-full settings-hub">
         <header className="settings-hub-header">
           <button
             type="button"
             className="settings-hub-back"
-            onClick={() => navigate(`${basePath}/general`)}
-            aria-label={t('backToSettings')}
+            onClick={() => navigate(-1)}
+            aria-label={t('back')}
           >
             <FontAwesomeIcon icon={faChevronLeft} aria-hidden="true" />
           </button>
-          <h1 className="settings-hub-title">{title}</h1>
+          <h1 className="settings-hub-title">{t('settings')}</h1>
           <span className="settings-hub-spacer" aria-hidden="true" />
         </header>
+
         {error && <div className="alert alert-error" role="alert">{error}</div>}
         {message && <div className="alert alert-ok" role="status" aria-live="polite">{message}</div>}
-        <div className="settings-detail-body">{children}</div>
-      </div>
-    )
-  }
 
-  const homePath = isAdmin ? '/admin' : '/app'
-  const homeBackLabel = isAdmin ? t('backToDashboard') : t('backToMembership')
+        <section className="settings-profile-card" aria-label={t('profile')}>
+          {avatarMenu}
+          <div className="settings-profile-meta">
+            <div className="settings-profile-name">{user?.name || '—'}</div>
+            <div className="settings-profile-email">{user?.email || '—'}</div>
+          </div>
+        </section>
 
-  if (section === 'general') {
-    return (
-      <div className="space-y-5 w-full settings-hub">
-        <header className="settings-hub-header">
-          <Link to={homePath} className="settings-hub-back" aria-label={homeBackLabel}>
-            <FontAwesomeIcon icon={faChevronLeft} aria-hidden="true" />
-          </Link>
-          <h1 className="settings-hub-title">{t('settings')}</h1>
-          <Link to={`${basePath}/profile`} className="settings-hub-edit">
-            {t('edit')}
-          </Link>
-        </header>
-
-        <section className="settings-list-card" aria-label={t('account')}>
+        <section className="settings-list-card" aria-label={t('editProfileDetails')}>
           <SettingsRow
             icon={faUser}
-            label={t('profileDetails')}
-            hint={user?.name}
-            to={`${basePath}/profile`}
-          />
-          <SettingsRow
-            icon={faPhone}
-            label={t('phone')}
+            label={t('editProfileDetails')}
             hint={user?.phone || t('notSet')}
             to={`${basePath}/profile`}
-          />
-          <SettingsRow
-            icon={faLock}
-            label={t('changePassword')}
-            to={`${basePath}/password`}
           />
         </section>
 
         <div>
           <h2 className="settings-list-group-title">{t('appearance')}</h2>
           <section className="settings-list-card" aria-label={t('appearance')}>
-            <SettingsRow icon={faSun} label={t('theme')} to={`${basePath}/appearance`} />
-            <SettingsRow
-              icon={faGear}
-              label={t('language')}
-              hint={lang === 'my' ? t('burmese') : t('english')}
-              to={`${basePath}/language`}
-            />
+            <div className="settings-list-row has-trailing">
+              <span className="settings-list-copy">
+                <span className="settings-list-label">{t('theme')}</span>
+                <span className="settings-list-hint">{t('themeCopy')}</span>
+              </span>
+              <ThemeSwitcher variant="switch" />
+            </div>
+            <div className="settings-list-row has-trailing">
+              <span className="settings-list-copy">
+                <span className="settings-list-label">{t('language')}</span>
+                <span className="settings-list-hint">{lang === 'my' ? t('burmese') : t('english')}</span>
+              </span>
+              <div className="settings-inline-switch" role="group" aria-label={t('language')}>
+                <button
+                  type="button"
+                  className={lang === 'en' ? 'active' : ''}
+                  onClick={() => setLang('en')}
+                  aria-pressed={lang === 'en'}
+                >
+                  EN
+                </button>
+                <button
+                  type="button"
+                  className={lang === 'my' ? 'active' : ''}
+                  onClick={() => setLang('my')}
+                  aria-pressed={lang === 'my'}
+                >
+                  MY
+                </button>
+              </div>
+            </div>
           </section>
         </div>
 
         <div>
-          <h2 className="settings-list-group-title">{t('securityPrivacy')}</h2>
-          <section className="settings-list-card" aria-label={t('securityPrivacy')}>
-            <SettingsRow
-              icon={faShieldHalved}
-              label={t('notifications')}
-              hint={t('notificationsHint')}
-              to={`${basePath}/profile`}
-            />
+          <h2 className="settings-list-group-title">{t('accountManagement')}</h2>
+          <section className="settings-list-card" aria-label={t('accountManagement')}>
+            <SettingsRow icon={faLock} label={t('changePassword')} to={`${basePath}/password`} />
+            <SettingsRow icon={faKey} label={t('forgotPassword')} to="/forgot-password" />
+            {!isPortal && (
+              <SettingsRow
+                icon={faTrash}
+                label={t('deleteAccount')}
+                hint={t('deleteAccountHint')}
+                danger
+                onClick={() => setDeleteAccountOpen(true)}
+              />
+            )}
           </section>
         </div>
 
@@ -371,8 +528,14 @@ export default function Settings() {
         <div>
           <h2 className="settings-list-group-title">{t('help')}</h2>
           <section className="settings-list-card" aria-label={t('help')}>
-            <SettingsRow icon={faCircleQuestion} label={t('helpFeedback')} to={helpPath} />
+            <SettingsRow icon={faCircleQuestion} label={t('faq')} to={`${basePath}/faq`} />
             <SettingsRow icon={faCircleInfo} label={t('aboutApp')} to={`${basePath}/about`} />
+            {isAdmin && (
+              <SettingsRow icon={faHeadset} label={t('customerFeedback')} to={helpPath} />
+            )}
+            {!isPortal && (
+              <SettingsRow icon={faHeadset} label={t('customerService')} to={helpPath} />
+            )}
           </section>
         </div>
 
@@ -380,43 +543,30 @@ export default function Settings() {
           <FontAwesomeIcon icon={faRightFromBracket} aria-hidden="true" />
           {t('signOut')}
         </button>
+
+        <ConfirmModal
+          open={deleteAccountOpen}
+          title={t('confirmDeleteTitle')}
+          message={t('deleteAccountConfirm')}
+          confirmLabel={t('deleteAccount')}
+          busy={busy === 'delete'}
+          onCancel={() => setDeleteAccountOpen(false)}
+          onConfirm={confirmDeleteAccount}
+        />
       </div>
     )
   }
 
-  if (section === 'appearance') {
-    return (
-      <DetailShell title={t('theme')}>
-        <section className="settings-list-card settings-detail-card space-y-4">
-          <p className="page-subtitle m-0">{t('themeCopy')}</p>
-          <ThemeSwitcher variant="cards" />
-        </section>
-      </DetailShell>
-    )
-  }
-
-  if (section === 'language') {
-    return (
-      <DetailShell title={t('language')}>
-        <section className="settings-list-card settings-detail-card">
-          <label className="sr-only" htmlFor="settings-language-select">{t('language')}</label>
-          <select
-            id="settings-language-select"
-            className="settings-select w-full"
-            value={lang}
-            onChange={(e) => setLang(e.target.value)}
-          >
-            <option value="en">{t('english')}</option>
-            <option value="my">{t('burmese')}</option>
-          </select>
-        </section>
-      </DetailShell>
-    )
+  const detailShellProps = {
+    error,
+    message,
+    onBack: () => navigate(-1),
+    backLabel: t('back'),
   }
 
   if (section === 'about') {
     return (
-      <DetailShell title={t('aboutApp')}>
+      <DetailShell title={t('aboutApp')} {...detailShellProps}>
         <section className="settings-list-card settings-detail-card space-y-3">
           <div className="settings-about-brand">
             <img src={appLogoUrl || '/brand/29-logo.png'} alt="" className="settings-about-logo" />
@@ -431,9 +581,61 @@ export default function Settings() {
     )
   }
 
+  if (section === 'faq') {
+    return (
+      <DetailShell title={t('faq')} {...detailShellProps}>
+        <section className="settings-list-card settings-detail-card space-y-4">
+          {isAdmin && (
+            <SettingsRow
+              icon={faCircleQuestion}
+              label={t('manageFaqs')}
+              hint={t('manageFaqsCopy')}
+              to="/admin/faqs"
+            />
+          )}
+          {faqsLoading && (
+            <p className="type-meta text-[var(--color-muted)] m-0" role="status">
+              {t('loading')}
+            </p>
+          )}
+          {!faqsLoading &&
+            faqs.map((item) => {
+              const question = lang === 'my' ? item.question_my || item.question_en : item.question_en
+              const answer = lang === 'my' ? item.answer_my || item.answer_en : item.answer_en
+              return (
+                <article key={item.id} className="settings-faq-item">
+                  <h3 className="settings-faq-q">{question}</h3>
+                  <p className="settings-faq-a">{answer}</p>
+                </article>
+              )
+            })}
+          {!faqsLoading && !faqs.length && (
+            <p className="type-meta text-[var(--color-muted)] m-0">{t('noFaqsFound')}</p>
+          )}
+          {isAdmin && (
+            <SettingsRow
+              icon={faEnvelope}
+              label={t('customerFeedback')}
+              hint={t('customerFeedbackCopy')}
+              to={helpPath}
+            />
+          )}
+          {!isPortal && (
+            <SettingsRow
+              icon={faEnvelope}
+              label={t('customerService')}
+              hint={t('helpFeedbackHint')}
+              to={helpPath}
+            />
+          )}
+        </section>
+      </DetailShell>
+    )
+  }
+
   if (section === 'password') {
     return (
-      <DetailShell title={t('changePassword')}>
+      <DetailShell title={t('changePassword')} {...detailShellProps}>
         <section className="settings-list-card settings-detail-card space-y-3">
           <p className="page-subtitle m-0">{t('changePasswordCopy')}</p>
           <form onSubmit={onChangePassword} className="space-y-3">
@@ -484,7 +686,7 @@ export default function Settings() {
 
   if (section === 'branding' && isAdmin) {
     return (
-      <DetailShell title={t('appBranding')}>
+      <DetailShell title={t('appBranding')} {...detailShellProps}>
         <section className="settings-list-card settings-detail-card space-y-4">
           <p className="page-subtitle m-0">{t('appBrandingCopy')}</p>
           <div className="space-y-2">
@@ -529,7 +731,7 @@ export default function Settings() {
                 required
                 maxLength={80}
                 value={appForm.app_name}
-                onChange={(e) => setAppForm({ ...appForm, app_name: e.target.value })}
+                onChange={(e) => setAppForm((prev) => ({ ...prev, app_name: e.target.value }))}
               />
             </div>
             <div className="field">
@@ -538,7 +740,7 @@ export default function Settings() {
                 id="settings-app-tagline"
                 maxLength={120}
                 value={appForm.app_tagline}
-                onChange={(e) => setAppForm({ ...appForm, app_tagline: e.target.value })}
+                onChange={(e) => setAppForm((prev) => ({ ...prev, app_tagline: e.target.value }))}
               />
             </div>
             <button type="submit" className="btn btn-primary" disabled={busy === 'app'}>
@@ -552,138 +754,100 @@ export default function Settings() {
   }
 
   return (
-    <DetailShell title={t('publicProfile')}>
-      <form onSubmit={onSaveProfile} className="public-profile">
-        <div className="public-profile-main space-y-4">
-          <div className="field">
-            <label htmlFor="settings-name">{t('name')}</label>
-            <input
-              id="settings-name"
-              autoComplete="name"
-              required
-              value={profile.name}
-              onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-            />
-            <small className="field-hint">{t('publicNameHint')}</small>
-          </div>
-
-          <div className="field">
-            <label htmlFor="settings-email">{t('publicEmail')}</label>
-            <div className="public-profile-email-row">
-              <input id="settings-email" value={user?.email || ''} disabled />
-            </div>
-            <small className="field-hint">{t('publicEmailHint')}</small>
-          </div>
-
-          <div className="field">
-            <label htmlFor="settings-phone">{t('phone')}</label>
-            <input
-              id="settings-phone"
-              autoComplete="tel"
-              value={profile.phone}
-              onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
-            />
-            <small className="field-hint">{t('publicPhoneHint')}</small>
-          </div>
-
-          <div className="field">
-            <label htmlFor="settings-address">{t('bio')}</label>
-            <textarea
-              id="settings-address"
-              rows={4}
-              value={profile.address}
-              onChange={(e) => setProfile({ ...profile, address: e.target.value })}
-              placeholder={t('bioPlaceholder')}
-            />
-            <small className="field-hint">{t('publicBioHint')}</small>
-          </div>
-
-          <div className="settings-toggles">
-            <label className="settings-toggle">
-              <input
-                type="checkbox"
-                checked={!!prefs.email_notifications}
-                onChange={(e) => setPrefs({ ...prefs, email_notifications: e.target.checked })}
-              />
-              <span>
-                <strong>{t('emailNotifications')}</strong>
-                <small>{t('emailNotificationsCopy')}</small>
-              </span>
-            </label>
-            <label className="settings-toggle">
-              <input
-                type="checkbox"
-                checked={!!prefs.purchase_alerts}
-                onChange={(e) => setPrefs({ ...prefs, purchase_alerts: e.target.checked })}
-              />
-              <span>
-                <strong>{t('purchaseAlerts')}</strong>
-                <small>{t('purchaseAlertsCopy')}</small>
-              </span>
-            </label>
-          </div>
-
-          <button type="submit" className="btn btn-primary" disabled={busy === 'profile'}>
-            <FontAwesomeIcon icon={faFloppyDisk} aria-hidden="true" />
-            {busy === 'profile' ? t('saving') : t('updateProfile')}
-          </button>
+    <DetailShell title={t('editProfileDetails')} {...detailShellProps}>
+      <form onSubmit={onSaveProfile} className="settings-list-card settings-detail-card space-y-4">
+        <div className="field">
+          <label htmlFor="settings-name">{t('name')}</label>
+          <input
+            id="settings-name"
+            autoComplete="name"
+            required
+            value={profile.name}
+            onChange={(e) => setProfile((prev) => ({ ...prev, name: e.target.value }))}
+          />
+          <small className="field-hint">{t('publicNameHint')}</small>
         </div>
 
-        <aside className="public-profile-photo">
-          <div className="public-profile-photo-label">{t('profilePicture')}</div>
-          <div className="public-profile-avatar-wrap" ref={avatarMenuRef}>
-            <div className="public-profile-avatar" aria-hidden="true">
-              {user?.avatar_url ? <img src={user.avatar_url} alt="" /> : <span>{initials}</span>}
-            </div>
-            <button
-              type="button"
-              className="public-profile-edit-btn"
-              aria-haspopup="menu"
-              aria-expanded={avatarMenuOpen}
-              disabled={busy === 'avatar'}
-              onClick={() => setAvatarMenuOpen((open) => !open)}
-            >
-              <FontAwesomeIcon icon={faPenToSquare} aria-hidden="true" />
-              {t('edit')}
-            </button>
-            {avatarMenuOpen && (
-              <div className="public-profile-avatar-menu" role="menu">
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setAvatarMenuOpen(false)
-                    fileRef.current?.click()
-                  }}
-                >
-                  {t('uploadPhoto')}
-                </button>
-                {user?.avatar_url && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="is-danger"
-                    onClick={() => {
-                      setAvatarMenuOpen(false)
-                      onRemoveAvatar()
-                    }}
-                  >
-                    {t('removePhoto')}
-                  </button>
-                )}
-              </div>
-            )}
+        <div className="field">
+          <label htmlFor="settings-email">{t('publicEmail')}</label>
+          <input id="settings-email" value={user?.email || ''} disabled />
+          <small className="field-hint">{t('publicEmailHint')}</small>
+        </div>
+
+        <div className="field">
+          <label htmlFor="settings-phone">{t('phone')}</label>
+          <input
+            id="settings-phone"
+            autoComplete="tel"
+            value={profile.phone}
+            onChange={(e) => setProfile((prev) => ({ ...prev, phone: e.target.value }))}
+          />
+          <small className="field-hint">{t('publicPhoneHint')}</small>
+        </div>
+
+        <div className="field">
+          <label htmlFor="settings-address">{t('bio')}</label>
+          <textarea
+            id="settings-address"
+            rows={4}
+            value={profile.address}
+            onChange={(e) => setProfile((prev) => ({ ...prev, address: e.target.value }))}
+            placeholder={t('bioPlaceholder')}
+          />
+          <small className="field-hint">{t('publicBioHint')}</small>
+        </div>
+
+        <div className="field">
+          <label htmlFor="settings-dob">{t('dateOfBirth')}</label>
+          <input
+            id="settings-dob"
+            type="date"
+            value={profile.date_of_birth}
+            onChange={(e) => setProfile((prev) => ({ ...prev, date_of_birth: e.target.value }))}
+          />
+          <small className="field-hint">{t('dateOfBirthHint')}</small>
+        </div>
+
+        <div className="settings-toggles">
+          <label className="settings-toggle">
             <input
-              ref={fileRef}
-              id="settings-avatar-input"
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              className="sr-only"
-              onChange={onAvatarSelected}
+              type="checkbox"
+              checked={!!prefs.email_notifications}
+              onChange={(e) => setPrefs((prev) => ({ ...prev, email_notifications: e.target.checked }))}
             />
-          </div>
-          <p className="field-hint m-0">{t('profilePhotoCopy')}</p>
-        </aside>
+            <span>
+              <strong>{t('emailNotifications')}</strong>
+              <small>{t('emailNotificationsCopy')}</small>
+            </span>
+          </label>
+          <label className="settings-toggle">
+            <input
+              type="checkbox"
+              checked={!!prefs.purchase_alerts}
+              onChange={(e) => setPrefs((prev) => ({ ...prev, purchase_alerts: e.target.checked }))}
+            />
+            <span>
+              <strong>{t('purchaseAlerts')}</strong>
+              <small>{t('purchaseAlertsCopy')}</small>
+            </span>
+          </label>
+          <label className="settings-toggle">
+            <input
+              type="checkbox"
+              checked={!!prefs.in_app_notifications}
+              onChange={(e) => setPrefs((prev) => ({ ...prev, in_app_notifications: e.target.checked }))}
+            />
+            <span>
+              <strong>{t('inAppNotifications')}</strong>
+              <small>{t('inAppNotificationsCopy')}</small>
+            </span>
+          </label>
+        </div>
+
+        <button type="submit" className="btn btn-primary" disabled={busy === 'profile'}>
+          <FontAwesomeIcon icon={faFloppyDisk} aria-hidden="true" />
+          {busy === 'profile' ? t('saving') : t('updateProfile')}
+        </button>
       </form>
     </DetailShell>
   )

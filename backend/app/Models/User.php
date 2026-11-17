@@ -25,10 +25,13 @@ class User extends Authenticatable
         'name',
         'email',
         'phone',
+        'nrc_number',
         'address',
+        'date_of_birth',
         'avatar',
         'preferences',
         'role',
+        'source',
         'tier',
         'points',
         'redeemable_points',
@@ -60,7 +63,7 @@ class User extends Authenticatable
                 $user->customer_code = static::nextCustomerCode();
             }
             if ($user->role === 'customer' && blank($user->tier)) {
-                $user->tier = 'Bronze';
+                $user->tier = 'Care';
             }
         });
 
@@ -81,10 +84,16 @@ class User extends Authenticatable
             'tier_points_365d' => 'integer',
             'total_spent' => 'integer',
             'preferences' => 'array',
+            'date_of_birth' => 'date',
             'last_activity_at' => 'datetime',
             'login_streak' => 'integer',
             'last_login_streak_date' => 'date',
         ];
+    }
+
+    public function appNotifications(): HasMany
+    {
+        return $this->hasMany(AppNotification::class);
     }
 
     public function getAvatarUrlAttribute(): ?string
@@ -128,9 +137,24 @@ class User extends Authenticatable
         return $this->belongsTo(User::class, 'referred_by');
     }
 
+    public function referrals(): HasMany
+    {
+        return $this->hasMany(User::class, 'referred_by');
+    }
+
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
+    }
+
+    public function isStaff(): bool
+    {
+        return $this->role === 'staff';
+    }
+
+    public function isPortalUser(): bool
+    {
+        return $this->isAdmin() || $this->isStaff();
     }
 
     public function isCustomer(): bool
@@ -145,7 +169,7 @@ class User extends Authenticatable
 
     public function getEarnMultiplierAttribute(): float
     {
-        return TierService::multiplierForTier($this->tier ?? 'Bronze');
+        return TierService::multiplierForTier($this->tier ?? 'Care');
     }
 
     public function getNextTierAttribute(): ?array

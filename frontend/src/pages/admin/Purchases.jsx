@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import ConfirmModal from '../../components/ConfirmModal'
 import Modal from '../../components/Modal'
 import PageHeader from '../../components/PageHeader'
 import Pagination from '../../components/Pagination'
+import { useAuth } from '../../context/AuthContext'
 import { useLanguage } from '../../context/LanguageContext'
-import api, { formatMMK, getErrorMessage } from '../../lib/api'
+import useDebouncedValue from '../../hooks/useDebouncedValue'
+import api, { downloadCsv, formatMMK, getErrorMessage } from '../../lib/api'
+import PurchaseReceipt from '../../components/PurchaseReceipt'
 import {
+  faBan,
   faBoxOpen,
+  faDownload,
   faFloppyDisk,
   faMagnifyingGlass,
   faPenToSquare,
@@ -14,6 +20,12 @@ import {
   faTrash,
   faXmark,
 } from '../../lib/icons'
+
+function normalizeMemberCode(raw) {
+  const value = String(raw || '').trim()
+  if (!value) return ''
+  return value.replace(/^29G:/i, '').trim().toUpperCase()
+}
 
 const PRODUCT_TYPES = ['Gold', 'Diamond', 'Jade', 'Ruby', 'Silver', 'Watch', 'Other']
 const PAYMENT_METHODS = ['Cash', 'Bank', 'KPay', 'WavePay', 'Visa/Master']
@@ -29,27 +41,46 @@ const emptyForm = {
   payment_method: 'Cash',
 }
 
+function newIdempotencyKey() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `purchase-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
 export default function AdminPurchases() {
+  const { isAdmin } = useAuth()
   const { t } = useLanguage()
   const [purchases, setPurchases] = useState([])
   const [meta, setMeta] = useState(null)
   const [page, setPage] = useState(1)
   const [customers, setCustomers] = useState([])
   const [search, setSearch] = useState('')
+  const debouncedSearch = useDebouncedValue(search, 300)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(emptyForm)
+  const [memberCode, setMemberCode] = useState('')
+  const [memberMatch, setMemberMatch] = useState(null)
+  const [memberLookupError, setMemberLookupError] = useState('')
+  const [receiptPurchase, setReceiptPurchase] = useState(null)
+  const [cancelTarget, setCancelTarget] = useState(null)
+  const [cancelReason, setCancelReason] = useState('')
   const [busy, setBusy] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting] = useState(false)
 
-  async function loadPurchases(nextPage = page) {
+  async function loadPurchases(nextPage = page, query = debouncedSearch) {
     setLoading(true)
     try {
       const { data } = await api.get('/admin/purchases', {
         params: {
-          search: search || undefined,
+          search: query || undefined,
           page: nextPage,
           per_page: 20,
         },
@@ -68,15 +99,48 @@ export default function AdminPurchases() {
   }
 
   useEffect(() => {
-    Promise.all([loadPurchases(1), loadCustomers()]).catch((err) => {
+    loadCustomers().catch((err) => {
       setError(getErrorMessage(err, t('somethingWrong')))
       setLoading(false)
     })
-  }, [])
+  }, [t])
+
+  useEffect(() => {
+    loadPurchases(1, debouncedSearch).catch((err) => {
+      setError(getErrorMessage(err, t('somethingWrong')))
+      setLoading(false)
+    })
+  }, [debouncedSearch])
+
+  function resolveMemberCode(raw, nextUserId) {
+    const code = normalizeMemberCode(raw)
+    setMemberCode(raw)
+    setMemberLookupError('')
+    if (!code) {
+      setMemberMatch(null)
+      if (nextUserId !== undefined) {
+        setForm((prev) => ({ ...prev, user_id: nextUserId }))
+      }
+      return
+    }
+    const match = customers.find(
+      (c) => String(c.customer_code || '').toUpperCase() === code,
+    )
+    if (!match) {
+      setMemberMatch(null)
+      setMemberLookupError(t('memberNotFound'))
+      return
+    }
+    setMemberMatch(match)
+    setForm((prev) => ({ ...prev, user_id: String(match.id) }))
+  }
 
   function openCreate() {
     setEditing(null)
     setForm(emptyForm)
+    setMemberCode('')
+    setMemberMatch(null)
+    setMemberLookupError('')
     setError('')
     setMessage('')
     setModalOpen(true)
@@ -93,6 +157,9 @@ export default function AdminPurchases() {
       points_to_redeem: String(purchase.points_redeemed || 0),
       payment_method: purchase.payment_method,
     })
+    setMemberCode(purchase.user?.customer_code || '')
+    setMemberMatch(purchase.user || null)
+    setMemberLookupError('')
     setError('')
     setMessage('')
     setModalOpen(true)
@@ -116,11 +183,15 @@ export default function AdminPurchases() {
     }
     try {
       if (editing) {
-        await api.put(`/admin/purchases/${editing.id}`, payload)
+        const { data } = await api.put(`/admin/purchases/${editing.id}`, payload)
         setMessage(t('purchaseUpdated'))
+        setReceiptPurchase(data.purchase)
       } else {
-        await api.post('/admin/purchases', payload)
+        const { data } = await api.post('/admin/purchases', payload, {
+          headers: { 'Idempotency-Key': newIdempotencyKey() },
+        })
         setMessage(t('purchaseRecorded'))
+        setReceiptPurchase(data.purchase)
       }
       setModalOpen(false)
       await loadPurchases()
@@ -132,30 +203,117 @@ export default function AdminPurchases() {
     }
   }
 
-  async function onDelete(purchase) {
-    if (!confirm(t('confirmDeletePurchase'))) return
+  function openCancel(purchase) {
+    setCancelTarget(purchase)
+    setCancelReason('')
+    setError('')
+  }
+
+  async function onCancelPurchase(e) {
+    e.preventDefault()
+    if (!cancelTarget) return
+    setBusy(true)
+    setError('')
     try {
-      await api.delete(`/admin/purchases/${purchase.id}`)
+      await api.post(`/admin/purchases/${cancelTarget.id}/cancel`, { reason: cancelReason })
+      setMessage(t('purchaseCancelled'))
+      setCancelTarget(null)
+      setCancelReason('')
+      await loadPurchases()
+    } catch (err) {
+      setError(getErrorMessage(err, t('couldNotCancelPurchase')))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    setError('')
+    try {
+      await api.delete(`/admin/purchases/${deleteTarget.id}`)
       setMessage(t('purchaseDeleted'))
+      setDeleteTarget(null)
       await loadPurchases()
     } catch (err) {
       setError(getErrorMessage(err, t('somethingWrong')))
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  async function onExport() {
+    if (!isAdmin) return
+    setExporting(true)
+    setError('')
+    try {
+      await downloadCsv(
+        '/admin/export/purchases',
+        { search: search || undefined },
+        'purchases.csv',
+      )
+      setMessage(t('exportStarted'))
+    } catch (err) {
+      setError(getErrorMessage(err, t('couldNotExport')))
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  async function onSyncSalesEntry() {
+    if (!isAdmin) return
+    setSyncing(true)
+    setError('')
+    setMessage('')
+    try {
+      const { data } = await api.post('/admin/salesentry/sync', {
+        fresh: false,
+        sales_only: true,
+        award_points: true,
+        max_pages: 5,
+      })
+      const stats = data.stats || {}
+      setMessage(
+        t('salesEntrySyncDone', {
+          imported: stats.imported ?? 0,
+          customers: stats.customersCreated ?? 0,
+        }),
+      )
+      await Promise.all([loadPurchases(1), loadCustomers()])
+    } catch (err) {
+      setError(getErrorMessage(err, t('couldNotSyncSalesEntry')))
+    } finally {
+      setSyncing(false)
     }
   }
 
   return (
     <div className="space-y-5">
       <PageHeader
+        showBack
         title={t('purchases')}
         subtitle={t('purchasesSubtitle')}
         icon={faBoxOpen}
-        backTo="/admin"
-        backLabel={t('backToDashboard')}
         actions={(
-          <button type="button" className="btn btn-primary" onClick={openCreate}>
-            <FontAwesomeIcon icon={faPlus} aria-hidden="true" />
-            {t('recordPurchase')}
-          </button>
+          <div className="action-row">
+            {isAdmin && (
+              <button type="button" className="btn btn-ghost" onClick={onSyncSalesEntry} disabled={syncing}>
+                <FontAwesomeIcon icon={faDownload} aria-hidden="true" />
+                {syncing ? t('syncingSalesEntry') : t('syncSalesEntry')}
+              </button>
+            )}
+            {isAdmin && (
+              <button type="button" className="btn btn-ghost" onClick={onExport} disabled={exporting}>
+                <FontAwesomeIcon icon={faDownload} aria-hidden="true" />
+                {exporting ? t('exporting') : t('exportCsv')}
+              </button>
+            )}
+            <button type="button" className="btn btn-primary" onClick={openCreate}>
+              <FontAwesomeIcon icon={faPlus} aria-hidden="true" />
+              {t('recordPurchase')}
+            </button>
+          </div>
         )}
       />
 
@@ -187,26 +345,34 @@ export default function AdminPurchases() {
         <table className="data" aria-label={t('purchases')}>
           <thead>
             <tr>
+              <th scope="col">{t('date')}</th>
+              <th scope="col">{t('voucher')}</th>
               <th scope="col">{t('product')}</th>
               <th scope="col" className="hide-mobile">{t('type')}</th>
               <th scope="col">{t('customerId')}</th>
               <th scope="col">{t('customer')}</th>
-              <th scope="col" className="hide-mobile">{t('amount')}</th>
-              <th scope="col" className="hide-mobile">{t('pointsRedeemed')}</th>
+              <th scope="col" className="hide-mobile">{t('branch')}</th>
               <th scope="col">{t('payable')}</th>
               <th scope="col">{t('pointsEarned')}</th>
-              <th scope="col" className="hide-mobile">{t('payment')}</th>
+              <th scope="col">{t('status')}</th>
               <th scope="col">{t('actions')}</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={10} className="loading-state" role="status" aria-live="polite">{t('loading')}</td>
+                <td colSpan={11} className="loading-state" role="status" aria-live="polite">{t('loading')}</td>
               </tr>
             )}
-            {!loading && purchases.map((p) => (
+            {!loading && purchases.map((p) => {
+              const cancelled = p.status === 'cancelled'
+              const when = p.sold_at || p.created_at
+              return (
               <tr key={p.id}>
+                <td data-label={t('date')} className="type-meta">
+                  {when ? new Date(when).toLocaleDateString() : '—'}
+                </td>
+                <td data-label={t('voucher')} className="font-medium">{p.voucher_number || '—'}</td>
                 <td data-label={t('product')}>
                   <div className="font-medium">{p.product_name}</div>
                   <div className="type-meta text-[var(--color-muted)]">{p.product_code}</div>
@@ -215,39 +381,58 @@ export default function AdminPurchases() {
                   {t(p.product_type) !== p.product_type ? t(p.product_type) : p.product_type}
                 </td>
                 <td data-label={t('customerId')} className="font-medium">{p.user?.customer_code || '—'}</td>
-                <td data-label={t('customer')}>{p.user?.name}</td>
-                <td data-label={t('amount')} className="hide-mobile">{formatMMK(p.amount)}</td>
-                <td data-label={t('pointsRedeemed')} className="hide-mobile">{Number(p.points_redeemed || 0).toLocaleString()}</td>
+                <td data-label={t('customer')}>
+                  <div>{p.user?.name}</div>
+                  <div className="type-meta text-[var(--color-muted)]">{p.user?.phone || ''}</div>
+                </td>
+                <td data-label={t('branch')} className="hide-mobile type-meta">{p.branch_name || '—'}</td>
                 <td data-label={t('payable')}>{formatMMK(p.net_amount)}</td>
                 <td data-label={t('pointsEarned')}>{Number(p.points_earned || 0).toLocaleString()}</td>
-                <td data-label={t('payment')} className="hide-mobile">{p.payment_method}</td>
+                <td data-label={t('status')}>
+                  {cancelled ? t('purchaseStatusCancelled') : t('purchaseStatusRecorded')}
+                </td>
                 <td data-label={t('actions')}>
                   <div className="action-row">
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-icon-action"
-                      onClick={() => openEdit(p)}
-                      aria-label={t('edit')}
-                    >
-                      <FontAwesomeIcon icon={faPenToSquare} aria-hidden="true" />
-                      <span className="btn-tooltip">{t('edit')}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-danger btn-icon-action"
-                      onClick={() => onDelete(p)}
-                      aria-label={t('delete')}
-                    >
-                      <FontAwesomeIcon icon={faTrash} aria-hidden="true" />
-                      <span className="btn-tooltip">{t('delete')}</span>
-                    </button>
+                    {!cancelled && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-icon-action"
+                        onClick={() => openEdit(p)}
+                        aria-label={t('edit')}
+                      >
+                        <FontAwesomeIcon icon={faPenToSquare} aria-hidden="true" />
+                        <span className="btn-tooltip">{t('edit')}</span>
+                      </button>
+                    )}
+                    {!cancelled && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-icon-action"
+                        onClick={() => openCancel(p)}
+                        aria-label={t('cancelPurchase')}
+                      >
+                        <FontAwesomeIcon icon={faBan} aria-hidden="true" />
+                        <span className="btn-tooltip">{t('cancelPurchase')}</span>
+                      </button>
+                    )}
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-icon-action"
+                        onClick={() => setDeleteTarget(p)}
+                        aria-label={t('delete')}
+                      >
+                        <FontAwesomeIcon icon={faTrash} aria-hidden="true" />
+                        <span className="btn-tooltip">{t('delete')}</span>
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
-            ))}
+            )})}
             {!loading && !purchases.length && (
               <tr>
-                <td colSpan={10} className="empty-state">{t('noPurchasesFound')}</td>
+                <td colSpan={11} className="empty-state">{t('noPurchasesFound')}</td>
               </tr>
             )}
           </tbody>
@@ -256,6 +441,15 @@ export default function AdminPurchases() {
 
       <Pagination meta={meta} onPageChange={(next) => loadPurchases(next)} />
 
+      <ConfirmModal
+        open={!!deleteTarget}
+        title={t('confirmDeleteTitle')}
+        message={t('confirmDeletePurchase')}
+        busy={deleting}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+      />
+
       <Modal
         open={modalOpen}
         onClose={closeModal}
@@ -263,12 +457,42 @@ export default function AdminPurchases() {
       >
         <form onSubmit={onSubmit} className="space-y-3">
           <div className="field">
+            <label htmlFor="purchase-member-code">{t('memberLookup')}</label>
+            <input
+              id="purchase-member-code"
+              value={memberCode}
+              onChange={(e) => resolveMemberCode(e.target.value)}
+              placeholder={t('memberLookupPlaceholder')}
+              autoComplete="off"
+            />
+            <p className="type-meta text-[var(--color-muted)] m-0 mt-1">{t('memberLookupHint')}</p>
+            {memberLookupError ? (
+              <p className="type-meta text-rose-600 m-0 mt-1">{memberLookupError}</p>
+            ) : null}
+            {memberMatch ? (
+              <p className="type-meta text-emerald-700 m-0 mt-1">
+                {t('memberMatched', {
+                  name: memberMatch.name,
+                  tier: t(memberMatch.tier || 'Care'),
+                  points: Number(memberMatch.redeemable_points || memberMatch.points || 0).toLocaleString(),
+                })}
+              </p>
+            ) : null}
+          </div>
+          <div className="field">
             <label htmlFor="purchase-user_id">{t('customer')}</label>
             <select
               id="purchase-user_id"
               required
               value={form.user_id}
-              onChange={(e) => setForm({ ...form, user_id: e.target.value })}
+              onChange={(e) => {
+                const id = e.target.value
+                setForm({ ...form, user_id: id })
+                const match = customers.find((c) => String(c.id) === id)
+                setMemberMatch(match || null)
+                setMemberCode(match?.customer_code || '')
+                setMemberLookupError('')
+              }}
             >
               <option value="">{t('selectCustomer')}</option>
               {customers.map((c) => (
@@ -367,6 +591,45 @@ export default function AdminPurchases() {
             <button className="btn btn-primary" disabled={busy} type="submit">
               <FontAwesomeIcon icon={faFloppyDisk} aria-hidden="true" />
               {busy ? t('saving') : t('save')}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={!!receiptPurchase}
+        onClose={() => setReceiptPurchase(null)}
+        title={t('purchaseSummary')}
+      >
+        <PurchaseReceipt purchase={receiptPurchase} />
+      </Modal>
+
+      <Modal
+        open={!!cancelTarget}
+        onClose={() => setCancelTarget(null)}
+        title={t('cancelPurchase')}
+      >
+        <form onSubmit={onCancelPurchase} className="space-y-3">
+          <p className="type-small text-[var(--color-muted)] m-0">{t('cancelPurchaseCopy')}</p>
+          <div className="field">
+            <label htmlFor="cancel-reason">{t('cancelReason')}</label>
+            <textarea
+              id="cancel-reason"
+              rows={3}
+              required
+              maxLength={255}
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+            />
+          </div>
+          <div className="action-row">
+            <button type="button" className="btn btn-ghost" onClick={() => setCancelTarget(null)}>
+              <FontAwesomeIcon icon={faXmark} aria-hidden="true" />
+              {t('cancel')}
+            </button>
+            <button type="submit" className="btn btn-danger" disabled={busy}>
+              <FontAwesomeIcon icon={faBan} aria-hidden="true" />
+              {busy ? t('saving') : t('confirmCancelPurchase')}
             </button>
           </div>
         </form>

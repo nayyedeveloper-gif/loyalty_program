@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import AuthLayout from '../../components/AuthLayout'
 import { useAuth } from '../../context/AuthContext'
@@ -11,6 +11,7 @@ export default function SignUp() {
   const { register } = useAuth()
   const { t } = useLanguage()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -21,6 +22,13 @@ export default function SignUp() {
   })
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    const ref = (searchParams.get('ref') || searchParams.get('referral') || '').trim().toUpperCase()
+    if (ref) {
+      setForm((prev) => ({ ...prev, referral_code: prev.referral_code || ref }))
+    }
+  }, [searchParams])
 
   function set(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }))

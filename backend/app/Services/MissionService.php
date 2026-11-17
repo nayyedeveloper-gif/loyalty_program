@@ -53,6 +53,11 @@ class MissionService
                         tierEligible: true,
                     );
                 }
+                NotificationService::missionCompleted(
+                    $user->fresh(),
+                    (string) $mission->title,
+                    (int) $mission->bonus_points,
+                );
             } else {
                 $progress->save();
             }
@@ -61,6 +66,10 @@ class MissionService
 
     public static function recordLogin(User $user): void
     {
+        // Progress mirrors consecutive login_streak (one count per calendar day).
+        // AuthController only calls this when a new day was counted.
+        $streak = max(0, (int) $user->login_streak);
+
         $missions = Mission::query()
             ->where('is_active', true)
             ->where('goal_type', 'login_days')
@@ -80,7 +89,9 @@ class MissionService
             if ($progress->completed) {
                 continue;
             }
-            $progress->progress += 1;
+
+            $progress->progress = min($streak, (int) $mission->goal_target);
+
             if ($progress->progress >= $mission->goal_target) {
                 $progress->completed = true;
                 $progress->completed_at = now();
@@ -94,6 +105,11 @@ class MissionService
                         ['mission_id' => $mission->id, 'mission_code' => $mission->code],
                     );
                 }
+                NotificationService::missionCompleted(
+                    $user->fresh(),
+                    (string) $mission->title,
+                    (int) $mission->bonus_points,
+                );
             } else {
                 $progress->save();
             }

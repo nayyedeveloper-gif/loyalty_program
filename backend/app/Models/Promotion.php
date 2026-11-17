@@ -14,6 +14,7 @@ class Promotion extends Model
         'ends_at',
         'product_types',
         'weekends_only',
+        'birthdays_only',
         'is_active',
     ];
 
@@ -25,6 +26,7 @@ class Promotion extends Model
             'ends_at' => 'datetime',
             'product_types' => 'array',
             'weekends_only' => 'boolean',
+            'birthdays_only' => 'boolean',
             'is_active' => 'boolean',
         ];
     }
