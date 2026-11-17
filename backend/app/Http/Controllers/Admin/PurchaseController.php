@@ -11,6 +11,7 @@ use App\Services\MissionService;
 use App\Services\NotificationService;
 use App\Services\PointsEngine;
 use App\Services\SpinGrantService;
+use App\Support\DateRangeQuery;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -36,6 +37,8 @@ class PurchaseController extends Controller
                     });
             });
         }
+
+        DateRangeQuery::applyCoalesce($query, $request, ['sold_at', 'created_at']);
 
         $perPage = min(200, max(1, (int) $request->input('per_page', 20)));
 

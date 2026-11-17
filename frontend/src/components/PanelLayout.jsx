@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { useAuth } from '../context/AuthContext'
+import { useChat } from '../context/ChatContext'
 import { useLanguage } from '../context/LanguageContext'
 import api, { mediaUrl } from '../lib/api'
 import { useNotifications } from '../context/NotificationContext'
@@ -53,11 +54,14 @@ function linkIsActive(pathname, link) {
 export default function PanelLayout({ titleKey, links }) {
   const { user, logout } = useAuth()
   const { unreadCount, markAllRead } = useNotifications()
+  const { unreadCount: chatUnreadCount } = useChat()
   const { t } = useLanguage()
   const [spinPromoPending, setSpinPromoPending] = useState(false)
   const [stockAlertCount, setStockAlertCount] = useState(0)
   const navigate = useNavigate()
   const location = useLocation()
+  // Same source as the chat FAB — don't Math.max with locally bumped row counts.
+  const inboxUnread = Number(chatUnreadCount || 0)
   const isMobile = useIsMobile()
   const sidebarId = useId()
   const toggleRef = useRef(null)
@@ -354,6 +358,7 @@ export default function PanelLayout({ titleKey, links }) {
             }
 
             const showPromoBadge = spinPromoPending && link.to === '/app/spinwheel'
+            const badgeCount = link.badge === 'chat' ? inboxUnread : 0
 
             return (
               <NavLink
@@ -369,6 +374,11 @@ export default function PanelLayout({ titleKey, links }) {
                 {showPromoBadge && (
                   <span className="sidebar-link-badge" aria-label="Spin promotion available" />
                 )}
+                {badgeCount > 0 ? (
+                  <span className="sidebar-link-badge" aria-label={t('chatUnread', { count: badgeCount })}>
+                    {badgeCount > 99 ? '99+' : badgeCount}
+                  </span>
+                ) : null}
               </NavLink>
             )
           })}

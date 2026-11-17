@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
+import ChatWidget from './components/ChatWidget'
 import ProtectedRoute from './components/ProtectedRoute'
 import PanelLayout from './components/PanelLayout'
 import PwaInstallBanner from './components/PwaInstallBanner'
@@ -17,6 +18,7 @@ import AdminMissions from './pages/admin/Missions'
 import AdminLedger from './pages/admin/Ledger'
 import AdminFeedback from './pages/admin/Feedback'
 import AdminFaqs from './pages/admin/Faqs'
+import ChatInbox from './pages/ChatInbox'
 import AdminStaff from './pages/admin/Staff'
 import AdminActivityLogs from './pages/admin/ActivityLogs'
 import AdminReferrals from './pages/admin/Referrals'
@@ -45,6 +47,7 @@ import {
   faChartLine,
   faCircleQuestion,
   faClipboardList,
+  faComments,
   faCrown,
   faDice,
   faEnvelopeOpenText,
@@ -58,6 +61,7 @@ import {
 } from './lib/icons'
 
 const staffLinks = [
+  { to: '/admin/inbox', labelKey: 'chatInboxTitle', icon: faComments, badge: 'chat' },
   { to: '/admin/customers', labelKey: 'customers', icon: faUsers },
   { to: '/admin/purchases', labelKey: 'purchases', icon: faBoxOpen },
   { to: '/admin/redemptions', labelKey: 'rewardRedemptions', icon: faReceipt },
@@ -68,7 +72,7 @@ const staffLinks = [
 
 const adminLinks = [
   { to: '/admin', labelKey: 'dashboard', end: true, icon: faChartLine },
-  ...staffLinks.slice(0, 4),
+  ...staffLinks.slice(0, 5),
   {
     to: '/admin/spinwheel',
     labelKey: 'spinwheel',
@@ -97,6 +101,7 @@ const adminLinks = [
 const customerLinks = [
   { to: '/app', labelKey: 'membership', end: true, icon: faCrown },
   { to: '/app/spinwheel', labelKey: 'spinwheel', icon: faDice },
+  { to: '/app/inbox', labelKey: 'chatSupportTitle', icon: faComments, badge: 'chat' },
   { to: '/app/history', labelKey: 'purchaseHistory', icon: faReceipt },
   { to: '/app/points', labelKey: 'pointsActivity', icon: faGem },
   { to: '/app/rewards', labelKey: 'rewardsCatalog', icon: faShoppingBag },
@@ -116,6 +121,7 @@ export default function App() {
   return (
     <>
       <PwaInstallBanner />
+      <ChatWidget />
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/signin" element={<SignIn />} />
@@ -125,6 +131,7 @@ export default function App() {
         <Route element={<ProtectedRoute roles={['admin', 'staff']} />}>
           <Route element={<PortalLayout />}>
             <Route path="/admin" element={<AdminOnly><AdminDashboard /></AdminOnly>} />
+            <Route path="/admin/inbox" element={<ChatInbox />} />
             <Route path="/admin/customers" element={<AdminCustomers />} />
             <Route path="/admin/purchases" element={<AdminPurchases />} />
             <Route path="/admin/spinwheel" element={<AdminOnly><AdminSpinDashboard /></AdminOnly>} />
@@ -154,6 +161,7 @@ export default function App() {
           <Route element={<PanelLayout titleKey="memberApp" links={customerLinks} />}>
             <Route path="/app" element={<CustomerMembership />} />
             <Route path="/app/spinwheel" element={<CustomerSpin />} />
+            <Route path="/app/inbox" element={<ChatInbox />} />
             <Route path="/app/history" element={<CustomerHistory />} />
             <Route path="/app/points" element={<PointsActivity />} />
             <Route path="/app/rewards" element={<CustomerRewards />} />

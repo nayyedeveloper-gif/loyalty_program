@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader'
 import Pagination from '../components/Pagination'
+import { useChat } from '../context/ChatContext'
 import { useLanguage } from '../context/LanguageContext'
 import { useNotifications } from '../context/NotificationContext'
 import api, { getErrorMessage } from '../lib/api'
@@ -9,6 +10,7 @@ import { faBell } from '../lib/icons'
 export default function Notifications() {
   const { t, lang } = useLanguage()
   const { setUnreadCount, refreshUnread, markAllRead } = useNotifications()
+  const { openMessenger } = useChat()
   const [items, setItems] = useState([])
   const [meta, setMeta] = useState(null)
   const [unread, setUnread] = useState(0)
@@ -85,6 +87,13 @@ export default function Notifications() {
     }
   }
 
+  async function onOpenItem(item) {
+    await markRead(item)
+    if (item.type === 'chat_message' || item.data?.open_chat) {
+      openMessenger({ conversationId: item.data?.conversation_id || null })
+    }
+  }
+
   return (
     <div className="space-y-5 w-full">
       <PageHeader
@@ -129,11 +138,11 @@ export default function Notifications() {
                 <tr
                   key={item.id}
                   className={!item.read_at ? 'is-unread' : undefined}
-                  onClick={() => markRead(item)}
+                  onClick={() => onOpenItem(item)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault()
-                      markRead(item)
+                      onOpenItem(item)
                     }
                   }}
                   tabIndex={0}
@@ -146,6 +155,9 @@ export default function Notifications() {
                     <div className="font-medium">{item.title}</div>
                     {item.body ? (
                       <div className="type-meta text-[var(--color-muted)]">{item.body}</div>
+                    ) : null}
+                    {(item.type === 'chat_message' || item.data?.open_chat) ? (
+                      <div className="type-meta text-[var(--color-primary)] mt-1">{t('openInChat')}</div>
                     ) : null}
                   </td>
                   <td data-label={t('status')}>

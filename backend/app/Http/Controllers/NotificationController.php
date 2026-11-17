@@ -12,11 +12,13 @@ class NotificationController extends Controller
     {
         $notifications = AppNotification::query()
             ->where('user_id', $request->user()->id)
+            ->where('type', '!=', 'chat_message')
             ->latest()
             ->paginate((int) $request->integer('per_page', 20));
 
         $unread = AppNotification::query()
             ->where('user_id', $request->user()->id)
+            ->where('type', '!=', 'chat_message')
             ->whereNull('read_at')
             ->count();
 
@@ -30,6 +32,7 @@ class NotificationController extends Controller
     {
         $unread = AppNotification::query()
             ->where('user_id', $request->user()->id)
+            ->where('type', '!=', 'chat_message')
             ->whereNull('read_at')
             ->count();
 

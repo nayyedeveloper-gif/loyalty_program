@@ -28,9 +28,28 @@ function buildUrl(path, params) {
 /** Resolve relative /storage and /api media paths for native Capacitor builds. */
 export function mediaUrl(path) {
   if (!path) return ''
-  if (isAbsoluteUrl(path) || path.startsWith('blob:') || path.startsWith('data:')) {
+  if (path.startsWith('blob:') || path.startsWith('data:')) {
     return path
   }
+
+  // Rewrite absolute backend storage URLs onto the current app origin/proxy.
+  // Fixes voice/images when APP_URL is http://localhost (no :8000) in local Vite.
+  if (isAbsoluteUrl(path)) {
+    try {
+      const parsed = new URL(path)
+      if (parsed.pathname.startsWith('/storage/')) {
+        const relative = `${parsed.pathname}${parsed.search}`
+        if (API_ORIGIN) {
+          return `${API_ORIGIN}${relative}`
+        }
+        return relative
+      }
+    } catch {
+      // fall through
+    }
+    return path
+  }
+
   if (API_ORIGIN) {
     return `${API_ORIGIN}${path.startsWith('/') ? path : `/${path}`}`
   }

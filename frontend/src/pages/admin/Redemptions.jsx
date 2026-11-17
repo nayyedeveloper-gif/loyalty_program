@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import DateRangeFilter from '../../components/DateRangeFilter'
 import PageHeader from '../../components/PageHeader'
 import Pagination from '../../components/Pagination'
 import { useLanguage } from '../../context/LanguageContext'
@@ -18,18 +19,28 @@ export default function AdminRedemptions() {
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebouncedValue(search, 300)
   const [status, setStatus] = useState(searchParams.get('status') || '')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState(null)
 
-  async function load(nextPage = 1, query = debouncedSearch, nextStatus = status) {
+  async function load(
+    nextPage = 1,
+    query = debouncedSearch,
+    nextStatus = status,
+    nextDateFrom = dateFrom,
+    nextDateTo = dateTo,
+  ) {
     setLoading(true)
     try {
       const { data } = await api.get('/admin/redemptions', {
         params: {
           search: query || undefined,
           status: nextStatus || undefined,
+          date_from: nextDateFrom || undefined,
+          date_to: nextDateTo || undefined,
           page: nextPage,
           per_page: 20,
         },
@@ -50,8 +61,8 @@ export default function AdminRedemptions() {
   }, [searchParams])
 
   useEffect(() => {
-    load(1, debouncedSearch, status)
-  }, [debouncedSearch, status])
+    load(1, debouncedSearch, status, dateFrom, dateTo)
+  }, [debouncedSearch, status, dateFrom, dateTo])
 
   function isInstant(item) {
     const reward = item?.reward_item
@@ -99,7 +110,7 @@ export default function AdminRedemptions() {
         role="search"
         onSubmit={(e) => {
           e.preventDefault()
-          load(1)
+          load(1, search.trim(), status, dateFrom, dateTo)
         }}
       >
         <label className="sr-only" htmlFor="redemption-search">{t('search')}</label>
@@ -131,6 +142,16 @@ export default function AdminRedemptions() {
             </option>
           ))}
         </select>
+        <DateRangeFilter
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          t={t}
+          lang={lang}
+          onChange={({ dateFrom: nextFrom, dateTo: nextTo }) => {
+            setDateFrom(nextFrom)
+            setDateTo(nextTo)
+          }}
+        />
         <button type="submit" className="btn btn-ghost">
           {t('search')}
         </button>
