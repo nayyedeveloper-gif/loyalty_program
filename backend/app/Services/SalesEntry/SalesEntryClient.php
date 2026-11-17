@@ -18,18 +18,29 @@ class SalesEntryClient
         $url = config('salesentry.base_url').'/api/master-setup';
 
         try {
-            $response = Http::connectTimeout(30)
+            $request = Http::connectTimeout(30)
                 ->timeout((int) config('salesentry.timeout', 90))
                 ->retry(3, 1500, throw: false)
                 ->acceptJson()
-                ->withHeaders(['X-API-KEY' => $apiKey])
-                ->get($url, [
-                    'per_page' => $perPage,
-                    'page' => $page,
-                    'sort' => 'date',
-                    'order' => 'desc',
-                ])
-                ->throw();
+                ->withHeaders(['X-API-KEY' => $apiKey]);
+
+            $caBundle = (string) config('salesentry.ca_bundle', '');
+            if ($caBundle === '') {
+                $defaultBundle = storage_path('certs/cacert.pem');
+                if (is_file($defaultBundle)) {
+                    $caBundle = $defaultBundle;
+                }
+            }
+            if ($caBundle !== '' && is_file($caBundle)) {
+                $request = $request->withOptions(['verify' => $caBundle]);
+            }
+
+            $response = $request->get($url, [
+                'per_page' => $perPage,
+                'page' => $page,
+                'sort' => 'date',
+                'order' => 'desc',
+            ])->throw();
         } catch (\Throwable $e) {
             throw new RuntimeException('Sales Entry API request failed: '.$e->getMessage(), previous: $e);
         }
