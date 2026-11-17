@@ -1,3 +1,4 @@
+import { useLanguage } from '../../../context/LanguageContext'
 import { mediaUrl } from '../lib/media'
 
 function initialsFrom(title, fallback = 'SW') {
@@ -17,7 +18,8 @@ export default function BrandMark({
   className = '',
   fallbackInitials = 'SW',
 }) {
-  const displayTitle = (title || '').trim() || 'Spin Wheel'
+  const { t } = useLanguage()
+  const displayTitle = (title || '').trim() || t('spinBrandFallback')
   const src = mediaUrl(logoUrl)
   const initials = initialsFrom(displayTitle, fallbackInitials)
 

@@ -4,8 +4,9 @@ Modern loyalty / membership app for a Myanmar jewellery shop.
 
 - **Backend:** Laravel 12 + Sanctum (API tokens, bcrypt passwords)
 - **Frontend:** React + Vite + Tailwind CSS
+- **Mobile:** Flutter (Android / iOS) member app in `mobile/`
 - **Auth:** Sign in, Sign up, Forgot password (email OTP)
-- **RBAC:** Admin portal (`/admin`) · Customer app (`/app`)
+- **RBAC:** Admin portal (`/admin`) · Customer app (`/app`) · Mobile member app
 
 ## Quick start
 
@@ -22,6 +23,15 @@ npm run dev
 ```
 
 Open http://localhost:5173
+
+### Mobile (Flutter)
+```bash
+cd mobile
+flutter pub get
+flutter run
+```
+
+See [`mobile/README.md`](mobile/README.md) for API URL flags (emulator vs device vs iOS simulator).
 
 ## Demo accounts
 | Role | Email | Password |

@@ -53,27 +53,11 @@ export default defineConfig({
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api/, /^\/storage/, /^\/@/],
         runtimeCaching: [
-          // Live revision polling must always hit the network and should not
-          // be written into the API cache on every tick (NetworkFirst does both).
-          {
-            urlPattern: ({ url }) =>
-              url.pathname === '/api/spinwheel/wheel/published/revision',
-            handler: 'NetworkOnly',
-          },
+          // Auth-bound API responses must never be shared across sessions.
+          // NetworkFirst keyed only by URL can replay another user's JSON.
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/api'),
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              networkTimeoutSeconds: 8,
-              expiration: {
-                maxEntries: 64,
-                maxAgeSeconds: 60 * 60,
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
+            handler: 'NetworkOnly',
           },
           {
             urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,

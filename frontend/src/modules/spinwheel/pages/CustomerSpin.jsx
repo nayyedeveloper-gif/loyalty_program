@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { useAuth } from '../../../context/AuthContext'
+import { useLanguage } from '../../../context/LanguageContext'
 import api, { getErrorMessage } from '../../../lib/api'
 import { mediaUrl } from '../lib/media'
 import { useLiveWheelSync } from '../lib/useLiveWheelSync'
@@ -20,25 +21,25 @@ function newIdempotencyKey() {
   return `spin_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
 }
 
-function remainingLabel(deadline) {
+function remainingLabel(deadline, t) {
   if (!deadline) return null
   const ms = new Date(deadline).getTime() - Date.now()
-  if (ms <= 0) return 'Past deadline'
+  if (ms <= 0) return t('spinPastDeadline')
   const days = Math.floor(ms / 86400000)
   const hours = Math.floor((ms % 86400000) / 3600000)
-  if (days > 0) return `${days}d ${hours}h left`
+  if (days > 0) return t('spinTimeLeftDays', { days, hours })
   const mins = Math.floor((ms % 3600000) / 60000)
-  return `${hours}h ${mins}m left`
+  return t('spinTimeLeftHours', { hours, mins })
 }
 
-function rewardCardHint(r) {
+function rewardCardHint(r, t) {
   if (r.display_status === 'ready_to_collect') {
-    const left = remainingLabel(r.claim_deadline_at)
-    return left ? `Collect within ${left}` : 'Show reference to staff'
+    const left = remainingLabel(r.claim_deadline_at, t)
+    return left ? t('spinHintCollectWithin', { left }) : t('spinHintShowStaff')
   }
-  if (r.display_status === 'claimed') return 'Already collected'
-  if (r.display_status === 'expired') return 'Collection window ended'
-  if (r.display_status === 'no_collection_required') return 'No staff collection needed'
+  if (r.display_status === 'claimed') return t('spinHintClaimed')
+  if (r.display_status === 'expired') return t('spinHintExpired')
+  if (r.display_status === 'no_collection_required') return t('spinHintNoCollect')
   return null
 }
 
@@ -52,8 +53,19 @@ function WinSuccessMark() {
   )
 }
 
+function spinCountLabel(t, count) {
+  const n = Number(count) || 0
+  return n === 1 ? t('spinChipOne', { count: n }) : t('spinChipCount', { count: n })
+}
+
+function remainingSpinsLabel(t, count) {
+  const n = Number(count) || 0
+  return n === 1 ? t('spinRemainingOne', { count: n }) : t('spinRemaining', { count: n })
+}
+
 export default function CustomerSpin() {
   const { user } = useAuth()
+  const { t } = useLanguage()
   const [tab, setTab] = useState('wheel')
   const [filter, setFilter] = useState('all')
   const [state, setState] = useState(null)
@@ -96,12 +108,12 @@ export default function CustomerSpin() {
       setError('')
       return next
     } catch (err) {
-      setError(getErrorMessage(err, 'Unable to load customer state'))
+      setError(getErrorMessage(err, t('spinUnableLoad')))
       return null
     } finally {
       setLoading(false)
     }
-  }, [notifyPromoChanged])
+  }, [notifyPromoChanged, t])
 
   const claimPromo = async () => {
     if (!pendingPromo?.id || promoBusy) return
@@ -109,12 +121,12 @@ export default function CustomerSpin() {
     setError('')
     try {
       const { data } = await api.post(`/spinwheel/promos/${pendingPromo.id}/claim`)
-      setPromoNote(`Claimed ${data.granted || pendingPromo.spin_count} spin(s). Enjoy!`)
+      setPromoNote(t('spinClaimedSpins', { count: data.granted || pendingPromo.spin_count }))
       setPendingPromo(null)
       notifyPromoChanged(data.has_pending)
       await load()
     } catch (err) {
-      setError(getErrorMessage(err, 'Unable to claim promo'))
+      setError(getErrorMessage(err, t('spinUnableClaimPromo')))
     } finally {
       setPromoBusy(false)
     }
@@ -129,7 +141,7 @@ export default function CustomerSpin() {
       setPendingPromo(null)
       notifyPromoChanged(data.has_pending)
     } catch (err) {
-      setError(getErrorMessage(err, 'Unable to dismiss promo'))
+      setError(getErrorMessage(err, t('spinUnableDismissPromo')))
     } finally {
       setPromoBusy(false)
     }
@@ -157,7 +169,7 @@ export default function CustomerSpin() {
       try {
         const { data } = await api.get(`/spinwheel/spins/by-key/${encodeURIComponent(key)}`)
         if (cancelled) return
-        setRecoverNote('Recovered your previous spin result.')
+        setRecoverNote(t('spinRecoveredPrev'))
         setTab('wheel')
         await presentResult(data, { animate: false })
         localStorage.removeItem(pendingKey(user.id))
@@ -167,7 +179,7 @@ export default function CustomerSpin() {
       }
     })()
     return () => { cancelled = true }
-  }, [user?.id, load, presentResult])
+  }, [user?.id, load, presentResult, t])
 
   useEffect(() => {
     if (!showConfetti) return undefined
@@ -207,17 +219,17 @@ export default function CustomerSpin() {
 
     try {
       const { data } = await api.post('/spinwheel/spin', { idempotency_key: key })
-      if (data.recovered) setRecoverNote('Showing the already-recorded result for this spin.')
+      if (data.recovered) setRecoverNote(t('spinRecoveredRecorded'))
       await presentResult(data, { animate: true })
       localStorage.removeItem(pendingKey(user.id))
       await load()
     } catch (err) {
-      setError(getErrorMessage(err, 'Unable to spin'))
+      setError(getErrorMessage(err, t('spinUnableSpin')))
       try {
         const { data } = await api.get(`/spinwheel/spins/by-key/${encodeURIComponent(key)}`)
         await presentResult(data, { animate: true })
         localStorage.removeItem(pendingKey(user.id))
-        setRecoverNote('Recovered spin after a connection issue.')
+        setRecoverNote(t('spinRecoveredConn'))
       } catch {
         /* still pending */
       }
@@ -236,16 +248,16 @@ export default function CustomerSpin() {
     () => Array.from({ length: 42 }).map((_, i) => ({
       left: `${(i * 9 + 4) % 100}%`,
       delay: `${(i % 12) * 0.05}s`,
-      color: ['#1d4ed8', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#ffffff'][i % 6],
+      color: ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#dbeafe', '#ffffff'][i % 6],
       w: 6 + (i % 4),
       h: 10 + (i % 5),
     })),
     [],
   )
 
-  const heroTitle = state?.wheel?.page_title || state?.wheel?.name || 'Spin & Win'
-  const heroCopy = state?.wheel?.subtitle
-    || 'Tap Spin to try your luck. Your prize is chosen securely by the rewards system.'
+  const heroTitle = state?.wheel?.page_title || state?.wheel?.name || t('spinDefaultTitle')
+  const heroCopy = state?.wheel?.subtitle || t('spinDefaultCopy')
+  const spinsLeft = state?.spins_remaining
 
   return (
     <main className="cx-shell">
@@ -253,15 +265,17 @@ export default function CustomerSpin() {
         <BrandMark
           title={state?.wheel?.brand_title || state?.wheel?.name}
           logoUrl={state?.wheel?.logo_url || state?.wheel?.logo_path}
-          subtitle={`${user?.name || 'Member'}${user?.customer_code ? ` · ${user.customer_code}` : ''}`}
+          subtitle={`${user?.name || t('spinMember')}${user?.customer_code ? ` · ${user.customer_code}` : ''}`}
         />
         <div className="cx-nav">
-          <span className="spin-chip">{state?.spins_remaining ?? '…'} spins</span>
+          <span className="spin-chip">
+            {spinsLeft == null ? '…' : spinCountLabel(t, spinsLeft)}
+          </span>
           <button type="button" className={`cx-nav-btn ${tab === 'wheel' ? 'is-active' : ''}`} onClick={() => setTab('wheel')}>
-            Spin Wheel
+            {t('spinTabWheel')}
           </button>
           <button type="button" className={`cx-nav-btn ${tab === 'rewards' ? 'is-active' : ''}`} onClick={() => setTab('rewards')}>
-            My Rewards
+            {t('spinTabRewards')}
           </button>
         </div>
       </header>
@@ -284,17 +298,19 @@ export default function CustomerSpin() {
             <h3>{pendingPromo.title}</h3>
             <p>{pendingPromo.message}</p>
             <p className="promo-offer-meta">
-              Claim to receive <strong>{pendingPromo.spin_count}</strong> spin
-              {pendingPromo.spin_count === 1 ? '' : 's'}
-              {pendingPromo.valid_hours ? ` · valid for ${pendingPromo.valid_hours}h` : ''}.
-              Closing skips this offer.
+              {t('spinPromoMeta', {
+                count: pendingPromo.spin_count,
+                hours: pendingPromo.valid_hours
+                  ? t('spinPromoHours', { hours: pendingPromo.valid_hours })
+                  : '',
+              })}
             </p>
             <div className="dialog-actions">
               <button type="button" className="cx-ghost" onClick={dismissPromo} disabled={promoBusy}>
-                No thanks
+                {t('spinNoThanks')}
               </button>
               <button type="button" className="btn-spin" onClick={claimPromo} disabled={promoBusy}>
-                {promoBusy ? 'Working…' : 'Claim spins'}
+                {promoBusy ? t('spinWorking') : t('spinClaimSpins')}
               </button>
             </div>
           </>
@@ -335,11 +351,11 @@ export default function CustomerSpin() {
           <div className="cx-stat-row spin-stats">
             <div className="cx-stat">
               <strong>{loading ? '—' : (state?.spins_remaining ?? 0)}</strong>
-              <span>Available spins</span>
+              <span>{t('spinAvailable')}</span>
             </div>
             <div className="cx-stat">
               <strong>{loading ? '—' : (state?.rewards?.length ?? 0)}</strong>
-              <span>Rewards won</span>
+              <span>{t('spinRewardsWon')}</span>
             </div>
           </div>
 
@@ -347,7 +363,10 @@ export default function CustomerSpin() {
             <div className="hint" style={{ marginTop: '0.65rem' }}>
               {state.expiry_groups.map((g) => (
                 <div key={g.expires_on}>
-                  {g.count} spin{g.count === 1 ? '' : 's'} expire {new Date(g.expires_at).toLocaleString()}
+                  {t(g.count === 1 ? 'spinExpiresLineOne' : 'spinExpiresLine', {
+                    count: g.count,
+                    when: new Date(g.expires_at).toLocaleString(),
+                  })}
                 </div>
               ))}
             </div>
@@ -362,17 +381,17 @@ export default function CustomerSpin() {
               whileHover={canSpin ? { y: -2 } : undefined}
               whileTap={canSpin ? { scale: 0.98 } : undefined}
             >
-              {spinning ? 'Spinning…' : state?.spins_remaining ? 'Spin Now' : 'No Spins Available'}
+              {spinning ? t('spinSpinning') : state?.spins_remaining ? t('spinNow') : t('spinNoSpins')}
             </motion.button>
             {!loading && (
               <span className="spins-remaining-pill" aria-live="polite">
-                {state?.spins_remaining ?? 0} spin{(state?.spins_remaining ?? 0) === 1 ? '' : 's'} remaining
+                {remainingSpinsLabel(t, state?.spins_remaining ?? 0)}
               </span>
             )}
             {!loading && !state?.spins_remaining && (
-              <p className="hint">Ask staff to grant spins in Admin.</p>
+              <p className="hint">{t('spinAskStaff')}</p>
             )}
-            <p className="hint">Confirm once — your result is determined securely after you spin.</p>
+            <p className="hint">{t('spinConfirmHint')}</p>
           </div>
         </section>
       )}
@@ -381,17 +400,17 @@ export default function CustomerSpin() {
         <section className="cx-card">
           <div className="rewards-toolbar">
             <div>
-              <h2 className="cx-title" style={{ fontSize: '1.8rem', margin: 0 }}>My Rewards</h2>
-              <p className="cx-copy" style={{ marginTop: 6 }}>Tap a prize for details and your collection reference.</p>
+              <h2 className="cx-title" style={{ fontSize: '1.8rem', margin: 0 }}>{t('spinRewardsTitle')}</h2>
+              <p className="cx-copy" style={{ marginTop: 6 }}>{t('spinRewardsCopy')}</p>
             </div>
             <div style={{ minWidth: 200 }}>
-              <label className="cx-kicker" htmlFor="reward-filter">Filter</label>
+              <label className="cx-kicker" htmlFor="reward-filter">{t('spinFilter')}</label>
               <select id="reward-filter" className="field-select" value={filter} onChange={(e) => setFilter(e.target.value)}>
-                <option value="all">All rewards</option>
-                <option value="ready_to_collect">Ready to collect</option>
-                <option value="claimed">Claimed</option>
-                <option value="expired">Expired</option>
-                <option value="no_collection_required">No collection required</option>
+                <option value="all">{t('spinFilterAll')}</option>
+                <option value="ready_to_collect">{t('spinFilterReady')}</option>
+                <option value="claimed">{t('spinFilterClaimed')}</option>
+                <option value="expired">{t('spinFilterExpired')}</option>
+                <option value="no_collection_required">{t('spinFilterNone')}</option>
               </select>
             </div>
           </div>
@@ -402,14 +421,14 @@ export default function CustomerSpin() {
             </div>
           ) : rewards.length === 0 ? (
             <EmptyState
-              title="No rewards here yet"
-              body="Spin the wheel to win your first prize, or change the filter."
-              action={<button type="button" className="btn-spin" style={{ marginTop: 12 }} onClick={() => setTab('wheel')}>Go spin</button>}
+              title={t('spinNoRewardsTitle')}
+              body={t('spinNoRewardsBody')}
+              action={<button type="button" className="btn-spin" style={{ marginTop: 12 }} onClick={() => setTab('wheel')}>{t('spinGoSpin')}</button>}
             />
           ) : (
             <div className="rewards-grid">
               {rewards.map((r) => {
-                const hint = rewardCardHint(r)
+                const hint = rewardCardHint(r, t)
                 return (
                   <motion.button
                     key={r.id}
@@ -437,24 +456,23 @@ export default function CustomerSpin() {
       )}
 
       <Modal open={showHelp} onClose={() => setShowHelp(false)}>
-        <p className="cx-kicker">Help</p>
-        <h2 className="cx-title" style={{ fontSize: '1.7rem' }}>How to spin</h2>
+        <p className="cx-kicker">{t('spinHelp')}</p>
+        <h2 className="cx-title" style={{ fontSize: '1.7rem' }}>{t('spinHowTo')}</h2>
         <p className="cx-copy" style={{ whiteSpace: 'pre-wrap' }}>
-          {state?.wheel?.help_text
-            || '1) Confirm your spin.\n2) The wheel stops on the prize selected by the server.\n3) Show your reward reference to staff for collection.'}
+          {state?.wheel?.help_text || t('spinDefaultHelp')}
         </p>
         <button type="button" className="btn-spin" style={{ marginTop: 14, minWidth: 140 }} onClick={() => setShowHelp(false)}>
-          Got it
+          {t('spinGotIt')}
         </button>
       </Modal>
 
       <ConfirmDialog
         open={confirmSpin}
         tone="customer"
-        title="Ready to Spin?"
-        body="You have an available spin. Once you confirm, your spin will be used."
-        confirmLabel="Confirm & Spin"
-        cancelLabel="Cancel"
+        title={t('spinReadyTitle')}
+        body={t('spinReadyBody')}
+        confirmLabel={t('spinConfirmSpin')}
+        cancelLabel={t('spinCancel')}
         busy={spinning}
         onCancel={() => setConfirmSpin(false)}
         onConfirm={spin}
@@ -473,7 +491,7 @@ export default function CustomerSpin() {
             transition={{ type: 'spring', stiffness: 280, damping: 24 }}
           >
             <WinSuccessMark />
-            <span className="win-modal-badge">{isMajor ? 'Major prize' : 'Congratulations!'}</span>
+            <span className="win-modal-badge">{isMajor ? t('spinMajorPrize') : t('spinCongrats')}</span>
             <h2 className="cx-title reward-detail-title">{result.prize_label}</h2>
             {mediaUrl(result.image_url || result.image_path) ? (
               <img className="win-modal-art" src={mediaUrl(result.image_url || result.image_path)} alt="" />
@@ -484,7 +502,7 @@ export default function CustomerSpin() {
               <p className="reward-detail-message">{result.winning_message}</p>
             )}
             <div className="ref-box">
-              <span className="ref-box-label">Show staff this reference</span>
+              <span className="ref-box-label">{t('spinShowStaffRef')}</span>
               <strong className="ref-box-code">{result.reward_code}</strong>
             </div>
             <div className="reward-detail-actions">
@@ -494,9 +512,9 @@ export default function CustomerSpin() {
                 style={{ minWidth: 160 }}
                 onClick={() => { setShowWin(false); setTab('rewards'); setSelectedReward(result) }}
               >
-                Prize details
+                {t('spinPrizeDetails')}
               </button>
-              <button type="button" className="cx-ghost" onClick={() => setShowWin(false)}>Keep spinning</button>
+              <button type="button" className="cx-ghost" onClick={() => setShowWin(false)}>{t('spinKeepSpinning')}</button>
             </div>
           </motion.div>
         )}
@@ -521,40 +539,44 @@ export default function CustomerSpin() {
 
             {selectedReward.display_status === 'ready_to_collect' && selectedReward.claim_deadline_at && (
               <p className="reward-detail-deadline">
-                Collect by {new Date(selectedReward.claim_deadline_at).toLocaleDateString()}
-                {remainingLabel(selectedReward.claim_deadline_at)
-                  ? ` · ${remainingLabel(selectedReward.claim_deadline_at)}`
+                {t('spinCollectBy', { date: new Date(selectedReward.claim_deadline_at).toLocaleDateString() })}
+                {remainingLabel(selectedReward.claim_deadline_at, t)
+                  ? ` · ${remainingLabel(selectedReward.claim_deadline_at, t)}`
                   : ''}
               </p>
             )}
 
             {selectedReward.requires_claim && selectedReward.display_status === 'ready_to_collect' && (
               <div className="ref-box">
-                <span className="ref-box-label">Collection reference</span>
+                <span className="ref-box-label">{t('spinCollectionRef')}</span>
                 <strong className="ref-box-code">{selectedReward.reward_code}</strong>
-                <span className="ref-box-help">Show this code to staff to collect your prize.</span>
+                <span className="ref-box-help">{t('spinShowCodeStaff')}</span>
               </div>
             )}
 
             {selectedReward.requires_claim && selectedReward.display_status !== 'ready_to_collect' && (
               <p className="reward-detail-ref-quiet">
-                Reference <strong>{selectedReward.reward_code}</strong>
+                {t('spinReference')} <strong>{selectedReward.reward_code}</strong>
               </p>
             )}
 
             {selectedReward.instructions && selectedReward.display_status === 'ready_to_collect' && (
               <div className="reward-detail-section">
-                <p className="reward-detail-section-label">How to collect</p>
+                <p className="reward-detail-section-label">{t('spinHowToCollect')}</p>
                 <p className="reward-detail-section-body">{selectedReward.instructions}</p>
               </div>
             )}
 
             <p className="reward-detail-meta">
-              Won {selectedReward.created_at ? new Date(selectedReward.created_at).toLocaleDateString() : '—'}
+              {t('spinWonOn', {
+                date: selectedReward.created_at
+                  ? new Date(selectedReward.created_at).toLocaleDateString()
+                  : '—',
+              })}
             </p>
 
             <button type="button" className="cx-ghost" style={{ marginTop: 14 }} onClick={() => setSelectedReward(null)}>
-              Close
+              {t('spinClose')}
             </button>
           </div>
         )}

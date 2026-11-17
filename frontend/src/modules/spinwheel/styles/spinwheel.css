@@ -60,8 +60,18 @@
     --radius-md: 0.75rem;
     --radius-lg: 1rem;
     --shadow-soft: var(--cx-shadow);
-    --font-display: "Gotham", "Montserrat", var(--font-sans, "Segoe UI", sans-serif);
-    --font-body: "Gotham", "Montserrat", var(--font-sans, "Segoe UI", sans-serif);
+    /* Match main membership app typography (Inter + Noto Sans Myanmar) */
+    --font-display: var(--font-sans, "Inter", "Noto Sans Myanmar", ui-sans-serif, system-ui, sans-serif);
+    --font-body: var(--font-sans, "Inter", "Noto Sans Myanmar", ui-sans-serif, system-ui, sans-serif);
+}
+
+html[data-lang="my"] .cx-shell,
+html[data-lang="my"] .guest-shell,
+html[data-lang="my"] .cx-shell .cx-title,
+html[data-lang="my"] .cx-shell .cx-brand,
+html[data-lang="my"] .guest-shell .cx-title,
+html[data-lang="my"] .guest-shell .cx-brand {
+    font-family: var(--font-myanmar, "Noto Sans Myanmar", "Inter", "Myanmar Text", sans-serif);
 }
 
 /* Avoid global body/#root overrides — loyalty shell owns those. */
@@ -94,14 +104,38 @@
     border-radius: 999px;
     border: 1px solid transparent;
 }
-.badge-ready { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
-.badge-claimed { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
-.badge-expired { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+.badge-ready {
+    background: color-mix(in srgb, var(--color-ok) 12%, var(--color-surface));
+    color: var(--color-ok);
+    border-color: color-mix(in srgb, var(--color-ok) 35%, var(--color-line));
+}
+.badge-claimed {
+    background: var(--color-primary-soft, #dbeafe);
+    color: var(--color-primary-dark);
+    border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-line));
+}
+.badge-expired {
+    background: color-mix(in srgb, var(--color-danger) 12%, var(--color-surface));
+    color: var(--color-danger);
+    border-color: color-mix(in srgb, var(--color-danger) 35%, var(--color-line));
+}
 .badge-none { background: var(--cx-surface-2); color: var(--cx-muted); border-color: var(--cx-border); }
 
-.admin-body .badge-ready { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
-.admin-body .badge-claimed { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
-.admin-body .badge-expired { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+.admin-body .badge-ready {
+    background: color-mix(in srgb, var(--color-ok) 12%, var(--color-surface));
+    color: var(--color-ok);
+    border-color: color-mix(in srgb, var(--color-ok) 35%, var(--color-line));
+}
+.admin-body .badge-claimed {
+    background: var(--color-primary-soft, #dbeafe);
+    color: var(--color-primary-dark);
+    border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-line));
+}
+.admin-body .badge-expired {
+    background: color-mix(in srgb, var(--color-danger) 12%, var(--color-surface));
+    color: var(--color-danger);
+    border-color: color-mix(in srgb, var(--color-danger) 35%, var(--color-line));
+}
 .admin-body .badge-none { background: var(--cx-surface-2); color: var(--cx-muted); border-color: var(--cx-border); }
 
 .skeleton {
@@ -174,9 +208,7 @@
   margin: 0 auto;
   padding: 1rem 1.15rem 2.5rem;
   border-radius: 1rem;
-  background:
-    radial-gradient(700px 280px at 8% 0%, rgba(59, 130, 246, 0.1), transparent 55%),
-    radial-gradient(560px 240px at 100% 10%, rgba(14, 165, 233, 0.08), transparent 50%);
+  background: var(--gradient-panel, var(--gradient-app));
 }
 
 .cx-header {
@@ -233,19 +265,25 @@
     color: var(--erp-blue);
 }
 .cx-nav-btn.is-active {
-    background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 55%, #2563eb 100%);
+    background: var(--gradient-primary);
     color: #fff;
-    border-color: #2563eb;
+    border-color: var(--color-primary-dark);
     font-weight: 600;
-    box-shadow: 0 6px 14px rgba(37, 99, 235, 0.2);
+    box-shadow: 0 6px 14px color-mix(in srgb, var(--color-primary) 28%, transparent);
 }
 .spin-chip {
     display: inline-flex; align-items: center; gap: 0.35rem;
     padding: 0.4rem 0.75rem; border-radius: 0.55rem;
-    background: linear-gradient(135deg, #eff6ff, #dbeafe);
+    background: var(--gradient-active, color-mix(in srgb, var(--color-primary) 14%, var(--color-surface)));
     border: 1px solid var(--erp-blue-ring);
     color: var(--erp-blue);
     font-weight: 600; font-size: 0.82rem;
+}
+.cx-header-tools {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .cx-hero {
@@ -605,12 +643,12 @@
 .wheel-hub {
     position: absolute; inset: 40.5%;
     border-radius: 50%; z-index: 5; pointer-events: none;
-    background: linear-gradient(145deg, #93c5fd 0%, #3b82f6 45%, #1d4ed8 100%);
+    background: var(--gradient-primary);
     border: 3px solid #ffffff;
     box-shadow:
       inset 0 2px 10px rgba(255,255,255,.5),
-      0 0 0 3px rgba(37, 99, 235, 0.25),
-      0 10px 22px rgba(37, 99, 235, 0.28);
+      0 0 0 3px color-mix(in srgb, var(--color-primary) 28%, transparent),
+      0 10px 22px color-mix(in srgb, var(--color-primary) 28%, transparent);
     display: grid; place-items: center;
 }
 .hub-core span {
@@ -635,14 +673,14 @@
     letter-spacing: 0.02em;
     text-transform: none;
     color: #fff;
-    background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 48%, #1d4ed8 100%);
-    box-shadow: 0 12px 28px rgba(37, 99, 235, 0.3);
+    background: var(--gradient-primary);
+    box-shadow: 0 12px 28px color-mix(in srgb, var(--color-primary) 30%, transparent);
     transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
 }
 .btn-spin:hover:not(:disabled) {
     transform: translateY(-2px);
     filter: brightness(1.04);
-    box-shadow: 0 16px 32px rgba(37, 99, 235, 0.36);
+    box-shadow: 0 16px 32px color-mix(in srgb, var(--color-primary) 36%, transparent);
 }
 .btn-spin:active:not(:disabled) { transform: translateY(1px) scale(0.99); }
 .btn-spin:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(.12); }
@@ -1728,6 +1766,27 @@
 
 @media (max-width: 960px) {
     .cx-hero { grid-template-columns: 1fr; }
+    .cx-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+    }
+    .cx-brand { width: 100%; }
+    .cx-nav,
+    .cx-header-tools {
+        width: 100%;
+        justify-content: stretch;
+    }
+    .cx-title { font-size: clamp(1.35rem, 5vw, 1.85rem); }
+    .cx-brand h1 { font-size: clamp(1.05rem, 4vw, 1.3rem); }
+    .rewards-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.85rem;
+    }
+    .rewards-toolbar > div[style],
+    .rewards-toolbar .field-select { min-width: 0 !important; width: 100%; }
+    .spin-stats { flex-direction: column; }
     .admin-grid { grid-template-columns: 1fr; }
     .admin-usage-layout { grid-template-columns: 1fr; }
     .promo-form-grid { grid-template-columns: 1fr; }
@@ -1747,14 +1806,22 @@
 }
 
 @media (max-width: 640px) {
-    .cx-shell { padding: 0.75rem 0.75rem 2rem; }
-    .cx-header { padding: 0.75rem; }
-    .cx-nav { width: 100%; }
-    .cx-nav-btn, .cx-ghost { flex: 1; text-align: center; justify-content: center; }
-    .wheel-panel { padding: 1.15rem 0.7rem 1.25rem; }
+    .cx-shell,
+    .guest-shell {
+        padding: 0.65rem 0.65rem calc(1.5rem + env(safe-area-inset-bottom, 0px));
+        border-radius: 0.75rem;
+        max-width: 100%;
+    }
+    .cx-header { padding: 0.7rem; margin-bottom: 0.85rem; }
+    .cx-nav { width: 100%; gap: 0.35rem; }
+    .cx-nav-btn, .cx-ghost { flex: 1; text-align: center; justify-content: center; min-height: 42px; }
+    .spin-chip { width: 100%; justify-content: center; }
+    .wheel-panel { padding: 1rem 0.55rem 1.15rem; }
+    .spin-title-row { gap: 0.4rem; padding-inline: 0.2rem; }
+    .spin-page-title { font-size: clamp(1.25rem, 6vw, 1.65rem) !important; }
     .wheel-stage {
-        width: min(340px, 92vw);
-        margin-top: 1.15rem;
+        width: min(360px, calc(100vw - 2rem));
+        margin-top: 1rem;
     }
     .wheel-pointer {
         top: -22px;
@@ -1764,10 +1831,15 @@
     }
     .wheel-disk { inset: 12px; border-width: 5px; }
     .wheel-hub { inset: 39.5%; }
-    .wheel-seg-label { font-size: 0.64rem; }
+    .wheel-seg-label { font-size: 0.62rem; line-height: 1.15; }
     .wheel-seg { padding-top: 5.5%; }
-    .btn-spin { min-width: min(210px, 88vw); width: min(240px, 88vw); }
-    .spin-hero-copy { font-size: 0.9rem; padding: 0 0.35rem; }
+    .btn-spin {
+        min-width: min(220px, 90vw);
+        width: min(100%, 90vw);
+        min-height: 48px;
+    }
+    .spin-cta-wrap { padding-inline: 0.25rem; }
+    .spin-hero-copy { font-size: 0.88rem; padding: 0 0.25rem; }
     .wheel-prize-tip {
         width: min(280px, calc(100vw - 16px));
         padding: 0.65rem 0.75rem;
@@ -1776,6 +1848,7 @@
     .reward-detail-actions { flex-direction: column; }
     .reward-detail-actions .btn-spin,
     .reward-detail-actions .cx-ghost { width: 100%; }
+    .modal-panel { width: min(100vw - 1.25rem, 440px); margin: 0.5rem; }
     .admin-module-grid { grid-template-columns: 1fr; }
 }
 

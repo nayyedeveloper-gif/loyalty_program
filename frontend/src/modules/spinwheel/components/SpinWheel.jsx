@@ -5,17 +5,17 @@ const SPIN_MS = 4500
 /** Slow idle drift: one full turn every 45s (compositor-friendly WAAPI). */
 const IDLE_TURN_MS = 45000
 
-/** Coordinated premium blue/white palette — ignores casino/random admin colors on the live wheel. */
+/** Matches main membership primary blues / soft surfaces. */
 const PREMIUM_PALETTE = [
-  '#1e3a8a',
-  '#ffffff',
   '#2563eb',
+  '#ffffff',
+  '#3b82f6',
   '#dbeafe',
   '#1d4ed8',
   '#eff6ff',
-  '#0284c7',
-  '#bfdbfe',
-  '#3b82f6',
+  '#60a5fa',
+  '#f3f7ff',
+  '#2563eb',
   '#f8fbff',
 ]
 
@@ -42,18 +42,18 @@ function PremiumPointer() {
     <svg className="wheel-pointer-svg" viewBox="0 0 64 88" aria-hidden="true" focusable="false">
       <defs>
         <linearGradient id={body} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#93c5fd" />
+          <stop offset="0%" stopColor="#60a5fa" />
           <stop offset="45%" stopColor="#3b82f6" />
-          <stop offset="100%" stopColor="#1d4ed8" />
+          <stop offset="100%" stopColor="#2563eb" />
         </linearGradient>
         <linearGradient id={edge} x1="0%" y1="0%" x2="0%" y2="100%">
           <stop offset="0%" stopColor="#ffffff" stopOpacity="0.9" />
-          <stop offset="100%" stopColor="#bfdbfe" stopOpacity="0.45" />
+          <stop offset="100%" stopColor="#dbeafe" stopOpacity="0.45" />
         </linearGradient>
         <radialGradient id={base} cx="50%" cy="40%" r="60%">
           <stop offset="0%" stopColor="#eff6ff" />
           <stop offset="55%" stopColor="#60a5fa" />
-          <stop offset="100%" stopColor="#1e40af" />
+          <stop offset="100%" stopColor="#2563eb" />
         </radialGradient>
       </defs>
       <circle cx="32" cy="18" r="14" fill={`url(#${base})`} stroke="#93c5fd" strokeWidth="2.5" />
@@ -62,7 +62,7 @@ function PremiumPointer() {
       <path
         d="M18 28 L32 78 L46 28 Z"
         fill={`url(#${body})`}
-        stroke="#1e3a8a"
+        stroke="#2563eb"
         strokeWidth="1.6"
         strokeLinejoin="round"
       />

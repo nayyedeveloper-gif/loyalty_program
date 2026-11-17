@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useLanguage } from '../../../context/LanguageContext'
 import { Modal } from './ui'
 
 const STORAGE_KEY = 'spin_grant_notice'
 
 export default function SpinGrantNotice() {
+  const { t } = useLanguage()
   const [notice, setNotice] = useState(null)
 
   useEffect(() => {
@@ -39,19 +41,19 @@ export default function SpinGrantNotice() {
     <Modal open={!!notice} onClose={dismiss} tone="customer" className="promo-offer-modal">
       {notice && (
         <>
-          <h3>{notice.title || 'Spin gift'}</h3>
+          <h3>{notice.title || t('spinGiftTitle')}</h3>
           <p>{notice.message}</p>
           {notice.count ? (
             <p className="promo-offer-meta">
-              You now have <strong>{notice.count}</strong> welcome spin{notice.count === 1 ? '' : 's'} ready.
+              {t('spinGiftMeta', { count: notice.count })}
             </p>
           ) : null}
           <div className="dialog-actions">
             <button type="button" className="cx-ghost" onClick={dismiss}>
-              Later
+              {t('spinGiftLater')}
             </button>
             <Link className="btn-spin" to="/app/spinwheel" onClick={dismiss} style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
-              Open Spinwheel
+              {t('spinGiftOpen')}
             </Link>
           </div>
         </>

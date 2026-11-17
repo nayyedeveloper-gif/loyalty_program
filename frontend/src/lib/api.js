@@ -37,6 +37,21 @@ export function mediaUrl(path) {
   return path
 }
 
+function shouldAttachAuth(path) {
+  // Guest spin APIs are session-token based; never send a portal Bearer token
+  // (admin/staff tokens trigger unrelated 403s in shared-browser testing).
+  return !String(path || '').startsWith('/spinwheel/guest')
+}
+
+function isPublicAuthPath(pathname) {
+  return (
+    pathname.startsWith('/signin')
+    || pathname.startsWith('/signup')
+    || pathname.startsWith('/forgot-password')
+    || pathname.startsWith('/guest/')
+  )
+}
+
 async function request(method, path, { params, body, headers } = {}) {
   const token = localStorage.getItem('token')
   const response = await fetch(buildUrl(path, params), {
@@ -44,7 +59,7 @@ async function request(method, path, { params, body, headers } = {}) {
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(token && shouldAttachAuth(path) ? { Authorization: `Bearer ${token}` } : {}),
       ...headers,
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -65,11 +80,7 @@ async function request(method, path, { params, body, headers } = {}) {
       localStorage.removeItem('token')
       localStorage.removeItem('user')
       const pathName = window.location.pathname
-      if (
-        !pathName.startsWith('/signin') &&
-        !pathName.startsWith('/signup') &&
-        !pathName.startsWith('/forgot-password')
-      ) {
+      if (!isPublicAuthPath(pathName)) {
         window.location.href = '/signin'
       }
     }

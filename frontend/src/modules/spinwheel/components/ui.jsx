@@ -1,4 +1,5 @@
 import { motion, AnimatePresence } from 'motion/react'
+import { useLanguage } from '../../../context/LanguageContext'
 
 export function StatusBadge({ status, label }) {
   const key = status === 'ready_to_collect' ? 'ready' : status === 'no_collection_required' ? 'none' : status
@@ -53,14 +54,15 @@ export function ConfirmDialog({
   open,
   title,
   body,
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
+  confirmLabel,
+  cancelLabel,
   onConfirm,
   onCancel,
   busy,
   tone = 'admin',
   danger = false,
 }) {
+  const { t } = useLanguage()
   const cancelClass = tone === 'customer' ? 'cx-ghost' : 'btn-admin'
   const confirmClass = tone === 'customer'
     ? 'btn-spin'
@@ -71,9 +73,11 @@ export function ConfirmDialog({
       <h3>{title}</h3>
       <p>{body}</p>
       <div className="dialog-actions">
-        <button type="button" className={cancelClass} onClick={onCancel} disabled={busy}>{cancelLabel}</button>
+        <button type="button" className={cancelClass} onClick={onCancel} disabled={busy}>
+          {cancelLabel || t('spinCancel')}
+        </button>
         <button type="button" className={confirmClass} onClick={onConfirm} disabled={busy}>
-          {busy ? 'Working…' : confirmLabel}
+          {busy ? t('spinWorking') : (confirmLabel || t('spinConfirmSpin'))}
         </button>
       </div>
     </Modal>

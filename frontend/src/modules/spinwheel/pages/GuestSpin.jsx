@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
+import LanguageSwitcher from '../../../components/LanguageSwitcher'
+import { useLanguage } from '../../../context/LanguageContext'
 import api, { getErrorMessage } from '../../../lib/api'
 import { mediaUrl } from '../lib/media'
 import { useLiveWheelSync } from '../lib/useLiveWheelSync'
@@ -27,7 +29,7 @@ function newIdempotencyKey() {
 /** Deduplicate concurrent activate calls for the same link (React Strict Mode remounts). */
 const activateInFlight = new Map()
 
-async function postActivate(token, guestSessionToken) {
+async function postActivate(token, guestSessionToken, fallbackMessage) {
   try {
     const { data } = await api.post(`/spinwheel/guest/${encodeURIComponent(token)}/activate`, {
       guest_session_token: guestSessionToken || undefined,
@@ -38,18 +40,18 @@ async function postActivate(token, guestSessionToken) {
     return {
       ...data,
       ok: false,
-      message: data.message || getErrorMessage(err, 'This guest spin link is unavailable.'),
+      message: data.message || getErrorMessage(err, fallbackMessage),
     }
   }
 }
 
-async function activateGuestLink(token) {
+async function activateGuestLink(token, fallbackMessage) {
   const existing = activateInFlight.get(token)
   if (existing) return existing
 
   const run = (async () => {
     const sessionBefore = localStorage.getItem(sessionStorageKey(token)) || undefined
-    let data = await postActivate(token, sessionBefore)
+    let data = await postActivate(token, sessionBefore, fallbackMessage)
 
     if (data.guest_session_token) {
       localStorage.setItem(sessionStorageKey(token), data.guest_session_token)
@@ -63,7 +65,7 @@ async function activateGuestLink(token) {
           await new Promise((r) => setTimeout(r, 40 * (attempt + 1)))
           continue
         }
-        data = await postActivate(token, stored)
+        data = await postActivate(token, stored, fallbackMessage)
         if (data.guest_session_token) {
           localStorage.setItem(sessionStorageKey(token), data.guest_session_token)
         }
@@ -90,20 +92,32 @@ function WinSuccessMark() {
   )
 }
 
-function GuestStatusCard({ title, body, brandTitle, logoUrl }) {
+function GuestStatusCard({ title, body, brandTitle, logoUrl, used, t }) {
   return (
     <main className="cx-shell guest-shell">
-      <section className="cx-card" style={{ marginTop: '2rem', textAlign: 'center' }}>
+      <div className="cx-header-tools" style={{ justifyContent: 'flex-end', marginBottom: '0.75rem' }}>
+        <LanguageSwitcher compact />
+      </div>
+      <section className="cx-card" style={{ marginTop: '0.5rem', textAlign: 'center' }}>
         <BrandMark title={brandTitle} logoUrl={logoUrl} centered />
-        <p className="cx-kicker" style={{ marginTop: '1rem' }}>Guest spin</p>
+        <p className="cx-kicker" style={{ marginTop: '1rem' }}>{t('spinGuestKicker')}</p>
         <h2 className="cx-title" style={{ fontSize: '2.2rem' }}>{title}</h2>
         <p className="cx-copy">{body}</p>
+        {used ? (
+          <p className="cx-copy" style={{ marginTop: '1.25rem' }}>
+            {t('spinGuestUsedHint')}{' '}
+            <a href="/signup">{t('spinGuestCreateAccount')}</a>
+            {' / '}
+            <a href="/signin">{t('spinGuestSignIn')}</a>
+          </p>
+        ) : null}
       </section>
     </main>
   )
 }
 
 export default function GuestSpin() {
+  const { t } = useLanguage()
   const { token } = useParams()
   const [status, setStatus] = useState('loading')
   const [message, setMessage] = useState('')
@@ -145,11 +159,11 @@ export default function GuestSpin() {
     try {
       if (!token) {
         setStatus('unavailable')
-        setMessage('This guest spin link is unavailable.')
+        setMessage(t('spinGuestLinkUnavailable'))
         return
       }
 
-      const data = await activateGuestLink(token)
+      const data = await activateGuestLink(token, t('spinGuestLinkUnavailable'))
       if (cancelled?.()) return
 
       if (data.guest_session_token) {
@@ -158,7 +172,7 @@ export default function GuestSpin() {
 
       if (!data.ok && !data.status) {
         setStatus('unavailable')
-        setMessage(data.message || 'This guest spin link is unavailable.')
+        setMessage(data.message || t('spinGuestLinkUnavailable'))
         return
       }
 
@@ -193,9 +207,9 @@ export default function GuestSpin() {
     } catch (err) {
       if (cancelled?.()) return
       setStatus('unavailable')
-      setMessage(getErrorMessage(err, 'This guest spin link is unavailable.'))
+      setMessage(getErrorMessage(err, t('spinGuestLinkUnavailable')))
     }
-  }, [token])
+  }, [token, t])
 
   useEffect(() => {
     let cancelled = false
@@ -238,7 +252,7 @@ export default function GuestSpin() {
       await presentResult(data, { animate: true })
       localStorage.removeItem(pendingKey(state?.reference))
     } catch (err) {
-      setError(getErrorMessage(err, 'Unable to spin'))
+      setError(getErrorMessage(err, t('spinUnableSpin')))
       try {
         const { data } = await api.post('/spinwheel/guest/spin', {
           guest_session_token: sessionToken,
@@ -264,35 +278,41 @@ export default function GuestSpin() {
     () => Array.from({ length: 42 }).map((_, i) => ({
       left: `${(i * 9 + 4) % 100}%`,
       delay: `${(i % 12) * 0.05}s`,
-      color: ['#1d4ed8', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#ffffff'][i % 6],
+      color: ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#dbeafe', '#ffffff'][i % 6],
       w: 6 + (i % 4),
       h: 10 + (i % 5),
     })),
     [],
   )
 
-  const heroTitle = state?.wheel?.page_title || state?.wheel?.name || 'Spin & Win'
-  const heroCopy = state?.wheel?.subtitle
-    || 'One complimentary spin. Your prize is chosen securely when you confirm.'
+  const heroTitle = state?.wheel?.page_title || state?.wheel?.name || t('spinDefaultTitle')
+  const heroCopy = state?.wheel?.subtitle || t('spinGuestDefaultCopy')
+  const spinsLeft = state?.spins_remaining ?? 0
 
   if (status === 'loading') {
     return (
       <main className="cx-shell guest-shell">
-        <section className="cx-card wheel-panel" style={{ marginTop: '2rem' }}>
+        <div className="cx-header-tools" style={{ justifyContent: 'flex-end' }}>
+          <LanguageSwitcher compact />
+        </div>
+        <section className="cx-card wheel-panel" style={{ marginTop: '1rem' }}>
           <Skeleton height={280} radius={999} width="min(360px, 80%)" />
-          <p className="hint">Preparing your guest spin…</p>
+          <p className="hint">{t('spinGuestPreparing')}</p>
         </section>
       </main>
     )
   }
 
   if (['unavailable', 'revoked', 'expired'].includes(status) || (status === 'used' && !displayResult)) {
+    const used = status === 'used'
     return (
       <GuestStatusCard
-        title="Link unavailable"
-        body={message || 'This guest spin link cannot be used.'}
+        t={t}
+        title={used ? t('spinGuestUsedTitle') : t('spinGuestUnavailableTitle')}
+        body={message || (used ? t('spinGuestUsedBody') : t('spinGuestUnavailableBody'))}
         brandTitle={state?.wheel?.brand_title}
         logoUrl={state?.wheel?.logo_url || state?.wheel?.logo_path}
+        used={used}
       />
     )
   }
@@ -300,8 +320,9 @@ export default function GuestSpin() {
   if (status === 'reserved' && !state?.wheel) {
     return (
       <GuestStatusCard
-        title="Already in use"
-        body={message || 'This guest spin link is already active in another session.'}
+        t={t}
+        title={t('spinGuestInUseTitle')}
+        body={message || t('spinGuestInUseBody')}
         brandTitle={state?.wheel?.brand_title}
         logoUrl={state?.wheel?.logo_url || state?.wheel?.logo_path}
       />
@@ -314,10 +335,13 @@ export default function GuestSpin() {
         <BrandMark
           title={state?.wheel?.brand_title || state?.wheel?.name}
           logoUrl={state?.wheel?.logo_url || state?.wheel?.logo_path}
-          subtitle="Guest reward · one spin"
+          subtitle={t('spinGuestSubtitle')}
         />
-        <div className="cx-nav">
-          <span className="spin-chip">{state?.spins_remaining ?? 0} spin{(state?.spins_remaining ?? 0) === 1 ? '' : 's'}</span>
+        <div className="cx-header-tools">
+          <LanguageSwitcher compact />
+          <span className="spin-chip">
+            {spinsLeft === 1 ? t('spinChipOne', { count: spinsLeft }) : t('spinChipCount', { count: spinsLeft })}
+          </span>
         </div>
       </header>
 
@@ -364,17 +388,18 @@ export default function GuestSpin() {
         <div className="cx-stat-row spin-stats">
           <div className="cx-stat">
             <strong>{state?.spins_remaining ?? 0}</strong>
-            <span>Available spins</span>
+            <span>{t('spinAvailable')}</span>
           </div>
           <div className="cx-stat">
             <strong>{displayResult ? 1 : 0}</strong>
-            <span>Rewards won</span>
+            <span>{t('spinRewardsWon')}</span>
           </div>
         </div>
 
         {state?.reference && (
           <p className="hint" style={{ marginTop: '0.65rem' }}>
-            Guest reference: <strong style={{ color: 'var(--cx-ink)' }}>{state.reference}</strong>
+            {t('spinGuestReference')}{' '}
+            <strong style={{ color: 'var(--cx-ink)' }}>{state.reference}</strong>
           </p>
         )}
 
@@ -388,13 +413,13 @@ export default function GuestSpin() {
               whileHover={{ y: -2 }}
               whileTap={{ scale: 0.98 }}
             >
-              {spinning ? 'Spinning…' : 'Spin Now'}
+              {spinning ? t('spinSpinning') : t('spinNow')}
             </motion.button>
           )}
 
           {canSpin && (
             <span className="spins-remaining-pill" aria-live="polite">
-              1 spin remaining
+              {t('spinRemainingOne', { count: 1 })}
             </span>
           )}
 
@@ -402,7 +427,7 @@ export default function GuestSpin() {
             <div style={{ marginTop: 8, textAlign: 'center' }}>
               <p><StatusBadge status={displayResult.display_status} label={displayResult.status_label} /></p>
               <p style={{ marginTop: 8 }}>
-                Reference:{' '}
+                {t('spinReference')}{' '}
                 <strong style={{ color: 'var(--cx-ink)' }}>{displayResult.reward_code}</strong>
               </p>
               <button
@@ -411,7 +436,7 @@ export default function GuestSpin() {
                 style={{ marginTop: 12, minWidth: 160 }}
                 onClick={() => setShowWin(true)}
               >
-                View prize
+                {t('spinGuestViewPrize')}
               </button>
             </div>
           )}
@@ -419,24 +444,23 @@ export default function GuestSpin() {
       </section>
 
       <Modal open={showHelp} onClose={() => setShowHelp(false)}>
-        <p className="cx-kicker">Help</p>
-        <h2 className="cx-title" style={{ fontSize: '1.7rem' }}>How to spin</h2>
+        <p className="cx-kicker">{t('spinHelp')}</p>
+        <h2 className="cx-title" style={{ fontSize: '1.7rem' }}>{t('spinHowTo')}</h2>
         <p className="cx-copy" style={{ whiteSpace: 'pre-wrap' }}>
-          {state?.wheel?.help_text
-            || '1) Confirm your spin.\n2) The wheel stops on the prize selected by the server.\n3) Show your reward reference to staff for collection.'}
+          {state?.wheel?.help_text || t('spinDefaultHelp')}
         </p>
         <button type="button" className="btn-spin" style={{ marginTop: 14, minWidth: 140 }} onClick={() => setShowHelp(false)}>
-          Got it
+          {t('spinGotIt')}
         </button>
       </Modal>
 
       <ConfirmDialog
         open={confirmSpin}
         tone="customer"
-        title="Ready to Spin?"
-        body="You have one available spin. Once you confirm, your spin will be used."
-        confirmLabel="Confirm & Spin"
-        cancelLabel="Cancel"
+        title={t('spinReadyTitle')}
+        body={t('spinReadyBodyGuest')}
+        confirmLabel={t('spinConfirmSpin')}
+        cancelLabel={t('spinCancel')}
         busy={spinning}
         onCancel={() => setConfirmSpin(false)}
         onConfirm={spin}
@@ -455,7 +479,7 @@ export default function GuestSpin() {
             transition={{ type: 'spring', stiffness: 280, damping: 24 }}
           >
             <WinSuccessMark />
-            <span className="win-modal-badge">{isMajor ? 'Major prize' : 'Congratulations!'}</span>
+            <span className="win-modal-badge">{isMajor ? t('spinMajorPrize') : t('spinCongrats')}</span>
             <h2 className="cx-title reward-detail-title">{displayResult.prize_label}</h2>
             {mediaUrl(displayResult.image_url || displayResult.image_path) ? (
               <img className="win-modal-art" src={mediaUrl(displayResult.image_url || displayResult.image_path)} alt="" />
@@ -474,7 +498,7 @@ export default function GuestSpin() {
             )}
             {displayResult.requires_claim !== false && (
               <div className="ref-box">
-                <span className="ref-box-label">Show staff this reference</span>
+                <span className="ref-box-label">{t('spinShowStaffRef')}</span>
                 <strong className="ref-box-code">{displayResult.reward_code}</strong>
                 {displayResult.instructions && (
                   <span className="ref-box-help">{displayResult.instructions}</span>
@@ -482,7 +506,7 @@ export default function GuestSpin() {
               </div>
             )}
             <button type="button" className="btn-spin" style={{ marginTop: 14 }} onClick={() => setShowWin(false)}>
-              Done
+              {t('spinDone')}
             </button>
           </motion.div>
         )}
