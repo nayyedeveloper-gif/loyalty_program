@@ -22,7 +22,8 @@ class CustomerController extends Controller
                 $q->where('name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%")
                     ->orWhere('phone', 'like', "%{$search}%")
-                    ->orWhere('customer_code', 'like', "%{$search}%");
+                    ->orWhere('customer_code', 'like', "%{$search}%")
+                    ->orWhere('nrc_number', 'like', "%{$search}%");
             });
         }
 
@@ -50,7 +51,7 @@ class CustomerController extends Controller
         $customer = User::create([
             ...$data,
             'role' => 'customer',
-            'tier' => 'Bronze',
+            'tier' => 'Care',
         ]);
         PointsEngine::ensureReferralCode($customer);
 

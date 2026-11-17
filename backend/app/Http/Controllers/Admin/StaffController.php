@@ -57,7 +57,7 @@ class StaffController extends Controller
             'phone' => $data['phone'],
             'password' => $data['password'],
             'role' => $data['role'],
-            'tier' => 'Bronze',
+            'tier' => 'Care',
         ]);
 
         AuditService::log(

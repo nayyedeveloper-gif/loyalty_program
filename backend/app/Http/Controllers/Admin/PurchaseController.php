@@ -25,10 +25,13 @@ class PurchaseController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('product_name', 'like', "%{$search}%")
                     ->orWhere('product_code', 'like', "%{$search}%")
+                    ->orWhere('voucher_number', 'like', "%{$search}%")
+                    ->orWhere('branch_name', 'like', "%{$search}%")
                     ->orWhereHas('user', function ($uq) use ($search) {
                         $uq->where('name', 'like', "%{$search}%")
                             ->orWhere('phone', 'like', "%{$search}%")
-                            ->orWhere('customer_code', 'like', "%{$search}%");
+                            ->orWhere('customer_code', 'like', "%{$search}%")
+                            ->orWhere('nrc_number', 'like', "%{$search}%");
                     });
             });
         }

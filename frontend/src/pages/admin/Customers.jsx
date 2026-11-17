@@ -226,7 +226,7 @@ export default function AdminCustomers() {
           }}
         >
           <option value="">{t('allTiers')}</option>
-          {['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond'].map((tierName) => (
+          {['Care', 'VIP', 'VVIP', 'CIP'].map((tierName) => (
             <option key={tierName} value={tierName}>{t(tierName)}</option>
           ))}
         </select>
@@ -243,6 +243,7 @@ export default function AdminCustomers() {
               <th scope="col">{t('customerId')}</th>
               <th scope="col">{t('name')}</th>
               <th scope="col">{t('phone')}</th>
+              <th scope="col" className="hide-mobile">{t('nrcNumber')}</th>
               <th scope="col" className="hide-mobile">{t('address')}</th>
               <th scope="col">{t('totalSpent')}</th>
               <th scope="col">{t('redeemablePoints')}</th>
@@ -254,7 +255,7 @@ export default function AdminCustomers() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={9} className="loading-state" role="status" aria-live="polite">{t('loading')}</td>
+                <td colSpan={10} className="loading-state" role="status" aria-live="polite">{t('loading')}</td>
               </tr>
             )}
             {!loading && customers.map((c) => (
@@ -265,6 +266,7 @@ export default function AdminCustomers() {
                   <div className="type-meta text-[var(--color-muted)]">{c.email}</div>
                 </td>
                 <td data-label={t('phone')}>{c.phone}</td>
+                <td data-label={t('nrcNumber')} className="hide-mobile type-meta">{c.nrc_number || '—'}</td>
                 <td data-label={t('address')} className="hide-mobile">{c.address || '—'}</td>
                 <td data-label={t('totalSpent')}>{formatMMK(c.total_spent)}</td>
                 <td data-label={t('redeemablePoints')}>{Number(c.redeemable_points ?? c.points ?? 0).toLocaleString()}</td>

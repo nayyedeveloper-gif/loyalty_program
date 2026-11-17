@@ -32,12 +32,12 @@ Open http://localhost:5173
 
 OTP emails are written to `backend/storage/logs/laravel.log` in local mode. The forgot-password UI also shows `debug_otp` when `APP_ENV=local`.
 
-## Tiers (MMK)
-| Tier | Min spend | Discount |
-|------|-----------|----------|
-| Silver | 0 | 0% |
-| Gold | 1,000,000 | 2% |
-| Platinum | 5,000,000 | 5% |
-| Diamond | 15,000,000 | 8% |
+## Tiers (lifetime spend, 1 lakh = 100,000 MMK)
+| Tier | Spend range | Multiplier |
+|------|-------------|------------|
+| Care | Below 300 lakh | 1.0x |
+| VIP | 300 – 500 lakh | 1.2x |
+| VVIP | 500 – 1,000 lakh | 1.5x |
+| CIP | Above 1,000 lakh | 2.0x |
 
-Points: **1 point / 1,000 MMK** net purchase.
+Points: **1 point / 10,000 MMK** net purchase, then × tier multiplier.

@@ -128,4 +128,33 @@ class NotificationService
             ['mission_title' => $title, 'bonus_points' => $bonusPoints],
         );
     }
+
+    public static function feedbackReplied(User $user, int $feedbackId, string $subject, string $preview): void
+    {
+        self::notify(
+            $user,
+            'feedback_reply',
+            'Update on your feedback',
+            "29 Gold replied to \"{$subject}\": {$preview}",
+            ['feedback_id' => $feedbackId, 'subject' => $subject],
+        );
+    }
+
+    public static function feedbackStatusChanged(User $user, int $feedbackId, string $subject, string $status): void
+    {
+        $label = match ($status) {
+            'in_progress' => 'in progress',
+            'resolved' => 'resolved',
+            'read' => 'under review',
+            default => $status,
+        };
+
+        self::notify(
+            $user,
+            'feedback_status',
+            'Feedback status updated',
+            "Your feedback \"{$subject}\" is now marked as {$label}.",
+            ['feedback_id' => $feedbackId, 'subject' => $subject, 'status' => $status],
+        );
+    }
 }

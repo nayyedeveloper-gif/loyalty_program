@@ -16,6 +16,10 @@ return [
     'allowed_origins_patterns' => [
         '#^https?://192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$#',
         '#^https?://10\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$#',
+        // Public share tunnels (any Wi‑Fi / mobile data)
+        '#^https://[a-z0-9-]+\.ngrok(-free)?\.app$#',
+        '#^https://[a-z0-9-]+\.ngrok\.io$#',
+        '#^https://[a-z0-9-]+\.trycloudflare\.com$#',
     ],
     'allowed_headers' => ['*'],
     'exposed_headers' => [],

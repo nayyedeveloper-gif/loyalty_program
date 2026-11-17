@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\FeedbackController as AdminFeedbackController;
 use App\Http\Controllers\Admin\LedgerController;
 use App\Http\Controllers\Admin\MissionController;
 use App\Http\Controllers\Admin\PromotionController;
+use App\Http\Controllers\Admin\SalesEntrySyncController;
 use App\Http\Controllers\Admin\PurchaseController;
 use App\Http\Controllers\Admin\RedemptionController;
 use App\Http\Controllers\Admin\RewardController;
@@ -85,8 +86,11 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::apiResource('staff', StaffController::class)->except(['show']);
 
     Route::post('/ledger/adjust', [LedgerController::class, 'adjust']);
+    Route::post('/salesentry/sync', [SalesEntrySyncController::class, 'sync']);
     Route::get('/feedback', [AdminFeedbackController::class, 'index']);
+    Route::get('/feedback/{feedback}', [AdminFeedbackController::class, 'show']);
     Route::put('/feedback/{feedback}', [AdminFeedbackController::class, 'update']);
+    Route::post('/feedback/{feedback}/replies', [AdminFeedbackController::class, 'reply']);
     Route::get('/activity-logs', [ActivityLogController::class, 'index']);
 
     Route::get('/export/customers', [ExportController::class, 'customers']);
@@ -114,6 +118,9 @@ Route::middleware(['auth:sanctum', 'customer'])->prefix('customer')->group(funct
     Route::get('/missions', [MembershipController::class, 'missions']);
     Route::get('/reviews', [MembershipController::class, 'reviews']);
     Route::post('/reviews', [MembershipController::class, 'storeReview']);
+    Route::get('/feedback', [CustomerFeedbackController::class, 'index']);
+    Route::get('/feedback/{feedback}', [CustomerFeedbackController::class, 'show']);
     Route::post('/feedback', [CustomerFeedbackController::class, 'store']);
+    Route::post('/feedback/{feedback}/replies', [CustomerFeedbackController::class, 'reply']);
     Route::put('/profile', [MembershipController::class, 'profile']);
 });

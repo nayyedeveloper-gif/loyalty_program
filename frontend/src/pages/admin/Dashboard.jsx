@@ -1,13 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { useAuth } from '../../context/AuthContext'
 import { useLanguage } from '../../context/LanguageContext'
+import useLivePoll from '../../hooks/useLivePoll'
 import api, { formatMMK, getErrorMessage } from '../../lib/api'
 import {
   faBell,
   faBoxOpen,
   faChartLine,
+  faCircle,
   faCrown,
   faEnvelopeOpenText,
   faGem,
@@ -16,20 +18,38 @@ import {
   faUsers,
 } from '../../lib/icons'
 
+const POLL_MS = 8000
+
 export default function AdminDashboard() {
   const { user } = useAuth()
-  const { t } = useLanguage()
-  const [data, setData] = useState(null)
-  const [error, setError] = useState('')
+  const { t, lang } = useLanguage()
 
-  useEffect(() => {
-    api
-      .get('/admin/dashboard')
-      .then((res) => setData(res.data))
-      .catch((err) => setError(getErrorMessage(err, t('somethingWrong'))))
-  }, [t])
+  const fetchDashboard = useCallback(async () => {
+    const res = await api.get('/admin/dashboard')
+    return res.data
+  }, [])
 
-  if (error) return <div className="alert alert-error" role="alert">{error}</div>
+  const { data, error, updatedAt, refreshing } = useLivePoll(fetchDashboard, {
+    intervalMs: POLL_MS,
+  })
+
+  const updatedLabel = useMemo(() => {
+    if (!updatedAt) return ''
+    return new Date(updatedAt).toLocaleTimeString(lang === 'my' ? 'my-MM' : undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    })
+  }, [lang, updatedAt])
+
+  if (error && !data) {
+    return (
+      <div className="alert alert-error" role="alert">
+        {getErrorMessage(error, t('somethingWrong'))}
+      </div>
+    )
+  }
+
   if (!data) {
     return (
       <div className="loading-state" role="status" aria-live="polite">
@@ -91,11 +111,34 @@ export default function AdminDashboard() {
   return (
     <div className="space-y-6">
       <section className="welcome-banner">
-        <span className="welcome-banner-eyebrow">{t('adminPortal')}</span>
-        <h1>
-          {t('welcome')}, {user?.name || 'Admin'}!
-        </h1>
-        <p>{t('dashboardSubtitle')}</p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <span className="welcome-banner-eyebrow">{t('adminPortal')}</span>
+            <h1>
+              {t('welcome')}, {user?.name || 'Admin'}!
+            </h1>
+            <p>{t('dashboardSubtitle')}</p>
+          </div>
+          <div
+            className="dashboard-live"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            title={updatedLabel ? t('dashboardUpdatedAt', { time: updatedLabel }) : t('dashboardLive')}
+          >
+            <FontAwesomeIcon
+              icon={faCircle}
+              className={`dashboard-live-dot${refreshing ? ' is-refreshing' : ''}`}
+              aria-hidden="true"
+            />
+            <span className="dashboard-live-label">
+              {refreshing ? t('dashboardRefreshing') : t('dashboardLive')}
+            </span>
+            {updatedLabel && (
+              <span className="dashboard-live-time">{t('dashboardUpdatedAt', { time: updatedLabel })}</span>
+            )}
+          </div>
+        </div>
       </section>
 
       {alertItems.length > 0 && (
@@ -128,7 +171,7 @@ export default function AdminDashboard() {
         </section>
       )}
 
-      <div className="stat-grid">
+      <div className="stat-grid" aria-live="polite">
         {stats.map((stat, i) => (
           <Link
             key={stat.label}
@@ -145,7 +188,7 @@ export default function AdminDashboard() {
         ))}
       </div>
 
-      <section className="dashboard-split">
+      <section className="dashboard-split" aria-live="polite">
         <div className="stat-card dashboard-panel dashboard-panel-tiers">
           <div className="dashboard-panel-head">
             <h2 className="section-heading dashboard-panel-title">

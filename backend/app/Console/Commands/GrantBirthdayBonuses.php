@@ -36,7 +36,7 @@ class GrantBirthdayBonuses extends Command
                         continue;
                     }
 
-                    $points = $this->bonusForTier((string) ($user->tier ?: 'Bronze'));
+                    $points = $this->bonusForTier((string) ($user->tier ?: 'Care'));
                     if ($points <= 0) {
                         continue;
                     }
@@ -77,10 +77,9 @@ class GrantBirthdayBonuses extends Command
         $key = 'birthday_bonus_'.strtolower($tier);
 
         return max(0, LoyaltySetting::getInt($key, match (strtolower($tier)) {
-            'silver' => 150,
-            'gold' => 250,
-            'platinum' => 400,
-            'diamond' => 500,
+            'vip' => 200,
+            'vvip' => 350,
+            'cip' => 500,
             default => 100,
         }));
     }

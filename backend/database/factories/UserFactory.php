@@ -30,7 +30,7 @@ class UserFactory extends Factory
             'phone' => '09'.fake()->unique()->numerify('#########'),
             'address' => fake()->city(),
             'role' => 'customer',
-            'tier' => 'Bronze',
+            'tier' => 'Care',
             'points' => 0,
             'redeemable_points' => 0,
             'tier_points_365d' => 0,

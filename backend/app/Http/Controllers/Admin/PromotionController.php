@@ -8,7 +8,6 @@ use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
 
 class PromotionController extends Controller
 {
@@ -37,7 +36,6 @@ class PromotionController extends Controller
     {
         $data = $this->validated($request);
         $data['slug'] = $this->uniqueSlug($data['name']);
-        $this->assertNoUnexpectedStacking($data);
 
         $promo = Promotion::create($data);
 
@@ -62,7 +60,6 @@ class PromotionController extends Controller
         if (isset($data['name']) && $data['name'] !== $promotion->name) {
             $data['slug'] = $this->uniqueSlug($data['name'], $promotion->id);
         }
-        $this->assertNoUnexpectedStacking(array_merge($promotion->toArray(), $data), $promotion->id);
         $promotion->update($data);
 
         AuditService::log(
@@ -107,11 +104,17 @@ class PromotionController extends Controller
             'product_types' => ['nullable', 'array'],
             'product_types.*' => ['string', 'in:Gold,Diamond,Jade,Ruby,Silver,Watch,Other'],
             'weekends_only' => ['sometimes', 'boolean'],
+            'birthdays_only' => ['sometimes', 'boolean'],
             'is_active' => ['sometimes', 'boolean'],
         ]);
 
         if (array_key_exists('product_types', $data) && is_array($data['product_types']) && count($data['product_types']) === 0) {
             $data['product_types'] = null;
+        }
+
+        // Birthday promos should not also be weekend-only; birthday day wins.
+        if (! empty($data['birthdays_only'])) {
+            $data['weekends_only'] = false;
         }
 
         return $data;
@@ -133,49 +136,5 @@ class PromotionController extends Controller
         }
 
         return $slug;
-    }
-
-    /**
-     * Warn admins when another active promo overlaps in date window.
-     * Earn engine already uses max multiplier; we still block identical date overlaps when both active.
-     */
-    private function assertNoUnexpectedStacking(array $data, ?int $ignoreId = null): void
-    {
-        if (! ($data['is_active'] ?? true)) {
-            return;
-        }
-
-        $starts = $data['starts_at'] ?? null;
-        $ends = $data['ends_at'] ?? null;
-
-        $query = Promotion::query()
-            ->where('is_active', true)
-            ->when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId));
-
-        if ($starts || $ends) {
-            $query->where(function ($q) use ($starts, $ends) {
-                if ($starts && $ends) {
-                    $q->where(function ($inner) use ($ends) {
-                        $inner->whereNull('starts_at')->orWhere('starts_at', '<=', $ends);
-                    })->where(function ($inner) use ($starts) {
-                        $inner->whereNull('ends_at')->orWhere('ends_at', '>=', $starts);
-                    });
-                } elseif ($starts) {
-                    $q->where(function ($inner) use ($starts) {
-                        $inner->whereNull('ends_at')->orWhere('ends_at', '>=', $starts);
-                    });
-                } else {
-                    $q->where(function ($inner) use ($ends) {
-                        $inner->whereNull('starts_at')->orWhere('starts_at', '<=', $ends);
-                    });
-                }
-            });
-        }
-
-        if ($query->exists()) {
-            throw ValidationException::withMessages([
-                'starts_at' => ['Another active promotion overlaps this period. Earn uses the highest multiplier only — deactivate or adjust dates.'],
-            ]);
-        }
     }
 }

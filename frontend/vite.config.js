@@ -17,15 +17,17 @@ export default defineConfig({
         'icons/apple-touch-icon.png',
       ],
       manifest: {
+        id: '/',
         name: '29 Gold & Jewellery Membership',
         short_name: '29 Gold',
         description: 'Membership and loyalty club for 29 Gold & Jewellery',
-        theme_color: '#14110e',
-        background_color: '#14110e',
+        theme_color: '#f8fafc',
+        background_color: '#f8fafc',
         display: 'standalone',
         orientation: 'portrait-primary',
-        start_url: '/',
-        scope: '/',
+        // Relative start keeps LAN IP / preview hosts working after Add to Home Screen.
+        start_url: './',
+        scope: './',
         lang: 'en',
         categories: ['shopping', 'business'],
         icons: [
@@ -49,6 +51,7 @@ export default defineConfig({
       },
       workbox: {
         navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api/, /^\/storage/, /^\/@/],
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/api'),
@@ -81,9 +84,10 @@ export default defineConfig({
           },
         ],
       },
+      // Dev SW + Vite unbundled modules is a common cause of blank
+      // standalone / home-screen launches. Test installable PWA via preview.
       devOptions: {
-        enabled: true,
-        navigateFallback: 'index.html',
+        enabled: false,
       },
     }),
   ],
@@ -91,6 +95,23 @@ export default defineConfig({
     port: 5173,
     // 0.0.0.0 so phones on the same Wi‑Fi can hit Vite for live reload.
     host: '0.0.0.0',
+    // Allow ngrok / Cloudflare Tunnel hostnames (any network access).
+    allowedHosts: true,
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+      '/storage': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+    },
+  },
+  preview: {
+    port: 4173,
+    host: '0.0.0.0',
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8000',

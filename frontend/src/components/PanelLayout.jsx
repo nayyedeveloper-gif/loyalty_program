@@ -206,7 +206,7 @@ export default function PanelLayout({ titleKey, links }) {
         className="sidebar"
         aria-label={t('mainNavigation')}
         aria-hidden={sidebarHidden || undefined}
-        {...(sidebarHidden ? { inert: '' } : {})}
+        {...(sidebarHidden ? { inert: true } : {})}
       >
         <div className="sidebar-top">
           <div className={`sidebar-brand ${shellCollapsed ? 'is-collapsed' : ''}`}>

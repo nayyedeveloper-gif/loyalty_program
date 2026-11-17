@@ -70,6 +70,7 @@ export default function AdminPurchases() {
   const [cancelReason, setCancelReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [syncing, setSyncing] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
@@ -258,6 +259,33 @@ export default function AdminPurchases() {
     }
   }
 
+  async function onSyncSalesEntry() {
+    if (!isAdmin) return
+    setSyncing(true)
+    setError('')
+    setMessage('')
+    try {
+      const { data } = await api.post('/admin/salesentry/sync', {
+        fresh: false,
+        sales_only: true,
+        award_points: true,
+        max_pages: 5,
+      })
+      const stats = data.stats || {}
+      setMessage(
+        t('salesEntrySyncDone', {
+          imported: stats.imported ?? 0,
+          customers: stats.customersCreated ?? 0,
+        }),
+      )
+      await Promise.all([loadPurchases(1), loadCustomers()])
+    } catch (err) {
+      setError(getErrorMessage(err, t('couldNotSyncSalesEntry')))
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -267,6 +295,12 @@ export default function AdminPurchases() {
         icon={faBoxOpen}
         actions={(
           <div className="action-row">
+            {isAdmin && (
+              <button type="button" className="btn btn-ghost" onClick={onSyncSalesEntry} disabled={syncing}>
+                <FontAwesomeIcon icon={faDownload} aria-hidden="true" />
+                {syncing ? t('syncingSalesEntry') : t('syncSalesEntry')}
+              </button>
+            )}
             {isAdmin && (
               <button type="button" className="btn btn-ghost" onClick={onExport} disabled={exporting}>
                 <FontAwesomeIcon icon={faDownload} aria-hidden="true" />
@@ -309,15 +343,15 @@ export default function AdminPurchases() {
         <table className="data" aria-label={t('purchases')}>
           <thead>
             <tr>
+              <th scope="col">{t('date')}</th>
+              <th scope="col">{t('voucher')}</th>
               <th scope="col">{t('product')}</th>
               <th scope="col" className="hide-mobile">{t('type')}</th>
               <th scope="col">{t('customerId')}</th>
               <th scope="col">{t('customer')}</th>
-              <th scope="col" className="hide-mobile">{t('amount')}</th>
-              <th scope="col" className="hide-mobile">{t('pointsRedeemed')}</th>
+              <th scope="col" className="hide-mobile">{t('branch')}</th>
               <th scope="col">{t('payable')}</th>
               <th scope="col">{t('pointsEarned')}</th>
-              <th scope="col" className="hide-mobile">{t('payment')}</th>
               <th scope="col">{t('status')}</th>
               <th scope="col">{t('actions')}</th>
             </tr>
@@ -330,8 +364,13 @@ export default function AdminPurchases() {
             )}
             {!loading && purchases.map((p) => {
               const cancelled = p.status === 'cancelled'
+              const when = p.sold_at || p.created_at
               return (
               <tr key={p.id}>
+                <td data-label={t('date')} className="type-meta">
+                  {when ? new Date(when).toLocaleDateString() : '—'}
+                </td>
+                <td data-label={t('voucher')} className="font-medium">{p.voucher_number || '—'}</td>
                 <td data-label={t('product')}>
                   <div className="font-medium">{p.product_name}</div>
                   <div className="type-meta text-[var(--color-muted)]">{p.product_code}</div>
@@ -340,12 +379,13 @@ export default function AdminPurchases() {
                   {t(p.product_type) !== p.product_type ? t(p.product_type) : p.product_type}
                 </td>
                 <td data-label={t('customerId')} className="font-medium">{p.user?.customer_code || '—'}</td>
-                <td data-label={t('customer')}>{p.user?.name}</td>
-                <td data-label={t('amount')} className="hide-mobile">{formatMMK(p.amount)}</td>
-                <td data-label={t('pointsRedeemed')} className="hide-mobile">{Number(p.points_redeemed || 0).toLocaleString()}</td>
+                <td data-label={t('customer')}>
+                  <div>{p.user?.name}</div>
+                  <div className="type-meta text-[var(--color-muted)]">{p.user?.phone || ''}</div>
+                </td>
+                <td data-label={t('branch')} className="hide-mobile type-meta">{p.branch_name || '—'}</td>
                 <td data-label={t('payable')}>{formatMMK(p.net_amount)}</td>
                 <td data-label={t('pointsEarned')}>{Number(p.points_earned || 0).toLocaleString()}</td>
-                <td data-label={t('payment')} className="hide-mobile">{p.payment_method}</td>
                 <td data-label={t('status')}>
                   {cancelled ? t('purchaseStatusCancelled') : t('purchaseStatusRecorded')}
                 </td>
@@ -431,7 +471,7 @@ export default function AdminPurchases() {
               <p className="type-meta text-emerald-700 m-0 mt-1">
                 {t('memberMatched', {
                   name: memberMatch.name,
-                  tier: t(memberMatch.tier || 'Bronze'),
+                  tier: t(memberMatch.tier || 'Care'),
                   points: Number(memberMatch.redeemable_points || memberMatch.points || 0).toLocaleString(),
                 })}
               </p>

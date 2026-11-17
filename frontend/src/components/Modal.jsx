@@ -7,23 +7,32 @@ export default function Modal({ open, title, onClose, children, wide = false }) 
   const titleId = useId()
   const dialogRef = useRef(null)
   const previouslyFocused = useRef(null)
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
 
   useEffect(() => {
     if (!open) return undefined
 
     previouslyFocused.current = document.activeElement
     const node = dialogRef.current
-    const focusables = () => [...(node?.querySelectorAll(FOCUSABLE) || [])]
+    const focusables = () =>
+      [...(node?.querySelectorAll(FOCUSABLE) || [])].filter(
+        (el) => el.getAttribute('type') !== 'file' && !el.classList.contains('sr-only'),
+      )
 
+    // Focus once on open — do not re-run while typing (onClose identity changes every render).
     const timer = window.setTimeout(() => {
-      const first = focusables()[0]
-      ;(first || node)?.focus()
+      const preferred =
+        node?.querySelector(
+          '[data-autofocus], input:not([type="file"]):not([type="hidden"]):not([type="checkbox"]):not([type="radio"]), textarea, select',
+        ) || focusables()[0]
+      ;(preferred || node)?.focus()
     }, 0)
 
     function onKeyDown(e) {
       if (e.key === 'Escape') {
         e.preventDefault()
-        onClose()
+        onCloseRef.current?.()
         return
       }
       if (e.key !== 'Tab' || !node) return
@@ -53,12 +62,12 @@ export default function Modal({ open, title, onClose, children, wide = false }) 
       document.body.style.overflow = previousOverflow
       previouslyFocused.current?.focus?.()
     }
-  }, [open, onClose])
+  }, [open])
 
   if (!open) return null
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={() => onCloseRef.current?.()}>
       <div
         ref={dialogRef}
         className={`modal ${wide ? 'modal-wide' : ''}`}

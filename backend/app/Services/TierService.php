@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\LoyaltySetting;
 use App\Models\LoyaltyTier;
 use App\Models\User;
 use Illuminate\Support\Collection;
@@ -22,7 +21,9 @@ class TierService
         $map = [];
         foreach (self::tiers() as $tier) {
             $map[$tier->name] = [
-                'min' => (int) $tier->min_tier_points,
+                'min' => (int) $tier->min_spend_mmk,
+                'min_spend_mmk' => (int) $tier->min_spend_mmk,
+                'min_lakh' => (int) round(((int) $tier->min_spend_mmk) / 100_000),
                 'multiplier' => (float) $tier->earn_multiplier,
                 'perks' => $tier->perks ?? [],
                 'sort_order' => (int) $tier->sort_order,
@@ -32,16 +33,22 @@ class TierService
         return $map;
     }
 
-    public static function tierForPoints(int $tierPoints365d): string
+    public static function tierForSpend(int $totalSpentMmk): string
     {
-        $tier = 'Bronze';
+        $tier = 'Care';
         foreach (self::tiers() as $row) {
-            if ($tierPoints365d >= (int) $row->min_tier_points) {
+            if ($totalSpentMmk >= (int) $row->min_spend_mmk) {
                 $tier = $row->name;
             }
         }
 
         return $tier;
+    }
+
+    /** @deprecated Use tierForSpend — kept for temporary call-site compat */
+    public static function tierForPoints(int $tierPoints365d): string
+    {
+        return self::tierForSpend($tierPoints365d);
     }
 
     public static function multiplierForTier(string $tier): float
@@ -60,23 +67,21 @@ class TierService
         }
 
         $next = $ordered[$index + 1];
-        $currentPoints = (int) $user->tier_points_365d;
-        $min = (int) $next->min_tier_points;
-        $remaining = max(0, $min - $currentPoints);
-        $divisor = max(1, LoyaltySetting::getInt('base_earn_divisor', 10000));
-        $currentMultiplier = max(0.01, self::multiplierForTier($user->tier ?? 'Bronze'));
-        // Approximate payable MMK needed at current earn rate (base × tier, no promo).
-        $estimatedMmk = (int) ceil(($remaining * $divisor) / $currentMultiplier);
+        $currentSpend = (int) $user->total_spent;
+        $min = (int) $next->min_spend_mmk;
+        $remaining = max(0, $min - $currentSpend);
 
         return [
             'name' => $next->name,
-            'min_points' => $min,
+            'min_points' => $min, // legacy key used by some clients
+            'min_spend_mmk' => $min,
+            'min_lakh' => (int) round($min / 100_000),
             'remaining' => $remaining,
-            'progress' => $min > 0 ? min(100, round(($currentPoints / $min) * 100, 1)) : 100,
+            'remaining_lakh' => (int) ceil($remaining / 100_000),
+            'progress' => $min > 0 ? min(100, round(($currentSpend / $min) * 100, 1)) : 100,
             'multiplier' => (float) $next->earn_multiplier,
-            'estimated_spend_mmk' => $estimatedMmk,
-            'earn_divisor' => $divisor,
-            'at_multiplier' => round($currentMultiplier, 2),
+            'estimated_spend_mmk' => $remaining,
+            'at_multiplier' => round(self::multiplierForTier($user->tier ?? 'Care'), 2),
         ];
     }
 

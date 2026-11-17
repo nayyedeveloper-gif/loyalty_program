@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "pwa:preview": "vite build && vite preview --host 0.0.0.0 --port 4173",
+    "share": "powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/share-public.ps1",
     "mobile:build": "vite build --mode mobile && npx cap sync android",
     "mobile:sync": "npx cap sync android",
     "mobile:open": "npx cap open android",

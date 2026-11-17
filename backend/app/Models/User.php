@@ -25,11 +25,13 @@ class User extends Authenticatable
         'name',
         'email',
         'phone',
+        'nrc_number',
         'address',
         'date_of_birth',
         'avatar',
         'preferences',
         'role',
+        'source',
         'tier',
         'points',
         'redeemable_points',
@@ -61,7 +63,7 @@ class User extends Authenticatable
                 $user->customer_code = static::nextCustomerCode();
             }
             if ($user->role === 'customer' && blank($user->tier)) {
-                $user->tier = 'Bronze';
+                $user->tier = 'Care';
             }
         });
 
@@ -167,7 +169,7 @@ class User extends Authenticatable
 
     public function getEarnMultiplierAttribute(): float
     {
-        return TierService::multiplierForTier($this->tier ?? 'Bronze');
+        return TierService::multiplierForTier($this->tier ?? 'Care');
     }
 
     public function getNextTierAttribute(): ?array

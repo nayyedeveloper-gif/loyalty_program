@@ -15,11 +15,10 @@ import {
 } from '../lib/icons'
 
 const TIERS = [
-  { key: 'Bronze', points: '0', multiplier: '1.0x', descKey: 'bronzeDesc', className: 'tier-Bronze' },
-  { key: 'Silver', points: '500', multiplier: '1.2x', descKey: 'silverDesc', className: 'tier-Silver' },
-  { key: 'Gold', points: '2,000', multiplier: '1.5x', descKey: 'goldDesc', className: 'tier-Gold' },
-  { key: 'Platinum', points: '6,000', multiplier: '2.0x', descKey: 'platinumDesc', className: 'tier-Platinum' },
-  { key: 'Diamond', points: '15,000', multiplier: '2.5x', descKey: 'diamondDesc', className: 'tier-Diamond' },
+  { key: 'Care', spend: 'Below 300 lakh', multiplier: '1.0x', descKey: 'careDesc', className: 'tier-Care' },
+  { key: 'VIP', spend: '300 – 500 lakh', multiplier: '1.2x', descKey: 'vipDesc', className: 'tier-VIP' },
+  { key: 'VVIP', spend: '500 – 1,000 lakh', multiplier: '1.5x', descKey: 'vvipDesc', className: 'tier-VVIP' },
+  { key: 'CIP', spend: 'Above 1,000 lakh', multiplier: '2.0x', descKey: 'cipDesc', className: 'tier-CIP' },
 ]
 
 export default function Landing() {
@@ -120,8 +119,8 @@ export default function Landing() {
                 <span className={`tier-pill ${tier.className}`}>{t(tier.key)}</span>
                 <div className="tier-meta">
                   <div>
-                    <span className="tier-meta-label">{t('minTierPoints')}</span>
-                    <strong>{tier.points}</strong>
+                    <span className="tier-meta-label">{t('minSpend')}</span>
+                    <strong>{tier.spend}</strong>
                   </div>
                   <div>
                     <span className="tier-meta-label">{t('multiplierLabel')}</span>

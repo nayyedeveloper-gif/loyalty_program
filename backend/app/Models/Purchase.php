@@ -9,9 +9,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Purchase extends Model
 {
     protected $fillable = [
+        'external_id',
         'user_id',
         'product_name',
         'product_code',
+        'voucher_number',
+        'branch_name',
+        'branch_id',
+        'transaction_side',
         'product_type',
         'amount',
         'discount_percent',
@@ -21,6 +26,7 @@ class Purchase extends Model
         'amount_offset_mmk',
         'earn_snapshot',
         'payment_method',
+        'sold_at',
         'status',
         'cancel_reason',
         'cancelled_at',
@@ -29,6 +35,8 @@ class Purchase extends Model
     protected function casts(): array
     {
         return [
+            'external_id' => 'integer',
+            'branch_id' => 'integer',
             'amount' => 'integer',
             'discount_percent' => 'integer',
             'net_amount' => 'integer',
@@ -36,6 +44,7 @@ class Purchase extends Model
             'points_redeemed' => 'integer',
             'amount_offset_mmk' => 'integer',
             'earn_snapshot' => 'array',
+            'sold_at' => 'datetime',
             'cancelled_at' => 'datetime',
         ];
     }

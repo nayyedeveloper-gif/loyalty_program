@@ -43,7 +43,7 @@ class AuthController extends Controller
                 'phone' => $data['phone'],
                 'password' => $data['password'],
                 'role' => 'customer',
-                'tier' => 'Bronze',
+                'tier' => 'Care',
                 'referred_by' => $referrer?->id,
                 'last_activity_at' => now(),
             ]);

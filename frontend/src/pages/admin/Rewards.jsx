@@ -389,6 +389,7 @@ export default function AdminRewards() {
             <input
               id="reward-name"
               required
+              autoFocus
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
             />

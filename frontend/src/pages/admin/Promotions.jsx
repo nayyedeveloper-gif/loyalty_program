@@ -18,6 +18,7 @@ const emptyForm = {
   ends_at: '',
   product_types: [],
   weekends_only: false,
+  birthdays_only: false,
   is_active: true,
 }
 
@@ -82,6 +83,7 @@ export default function AdminPromotions() {
       ends_at: toLocalInput(promo.ends_at),
       product_types: promo.product_types || [],
       weekends_only: !!promo.weekends_only,
+      birthdays_only: !!promo.birthdays_only,
       is_active: !!promo.is_active,
     })
     setError('')
@@ -116,7 +118,8 @@ export default function AdminPromotions() {
       starts_at: form.starts_at || null,
       ends_at: form.ends_at || null,
       product_types: form.product_types,
-      weekends_only: !!form.weekends_only,
+      weekends_only: !!form.weekends_only && !form.birthdays_only,
+      birthdays_only: !!form.birthdays_only,
       is_active: !!form.is_active,
     }
     try {
@@ -216,7 +219,11 @@ export default function AdminPromotions() {
                   <td data-label={t('name')}>
                     <div className="font-medium">{promo.name}</div>
                     <div className="type-meta text-[var(--color-muted)]">
-                      {promo.weekends_only ? t('weekendsOnly') : t('allDays')}
+                      {promo.birthdays_only
+                        ? t('birthdaysOnly')
+                        : promo.weekends_only
+                          ? t('weekendsOnly')
+                          : t('allDays')}
                       {promo.product_types?.length
                         ? ` · ${promo.product_types.join(', ')}`
                         : ` · ${t('allProductTypes')}`}
@@ -224,13 +231,17 @@ export default function AdminPromotions() {
                   </td>
                   <td data-label={t('multiplier')}>{Number(promo.multiplier)}×</td>
                   <td data-label={t('period')} className="type-meta">
-                    {promo.starts_at
-                      ? new Date(promo.starts_at).toLocaleString(lang === 'my' ? 'my-MM' : 'en-GB')
-                      : '—'}
-                    {' → '}
-                    {promo.ends_at
-                      ? new Date(promo.ends_at).toLocaleString(lang === 'my' ? 'my-MM' : 'en-GB')
-                      : '—'}
+                    {!promo.starts_at && !promo.ends_at
+                      ? t('alwaysOn')
+                      : `${
+                          promo.starts_at
+                            ? new Date(promo.starts_at).toLocaleString(lang === 'my' ? 'my-MM' : 'en-GB')
+                            : '—'
+                        } → ${
+                          promo.ends_at
+                            ? new Date(promo.ends_at).toLocaleString(lang === 'my' ? 'my-MM' : 'en-GB')
+                            : '—'
+                        }`}
                   </td>
                   <td data-label={t('status')}>{promo.is_active ? t('active') : t('inactive')}</td>
                   <td data-label={t('actions')}>
@@ -323,6 +334,7 @@ export default function AdminPromotions() {
               />
             </div>
           </div>
+          <p className="type-meta text-[var(--color-muted)] m-0">{t('promoDatesHint')}</p>
           <fieldset className="field">
             <legend className="type-small font-medium mb-2">{t('productTypesOptional')}</legend>
             <div className="toolbar-row">
@@ -341,7 +353,25 @@ export default function AdminPromotions() {
           <label className="settings-toggle">
             <input
               type="checkbox"
+              checked={!!form.birthdays_only}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  birthdays_only: e.target.checked,
+                  weekends_only: e.target.checked ? false : form.weekends_only,
+                })
+              }
+            />
+            <span>
+              <strong>{t('birthdaysOnly')}</strong>
+              <small>{t('birthdaysOnlyCopy')}</small>
+            </span>
+          </label>
+          <label className="settings-toggle">
+            <input
+              type="checkbox"
               checked={!!form.weekends_only}
+              disabled={!!form.birthdays_only}
               onChange={(e) => setForm({ ...form, weekends_only: e.target.checked })}
             />
             <span>
