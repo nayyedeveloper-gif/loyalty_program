@@ -50,6 +50,13 @@ export default defineConfig({
       workbox: {
         navigateFallback: '/index.html',
         runtimeCaching: [
+          // Live revision polling must always hit the network and should not
+          // be written into the API cache on every tick (NetworkFirst does both).
+          {
+            urlPattern: ({ url }) =>
+              url.pathname === '/api/spinwheel/wheel/published/revision',
+            handler: 'NetworkOnly',
+          },
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/api'),
             handler: 'NetworkFirst',

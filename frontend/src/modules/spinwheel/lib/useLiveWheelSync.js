@@ -4,10 +4,13 @@ import api from '../../../lib/api'
 /**
  * Polls a lightweight wheel revision endpoint and reloads the full published
  * wheel whenever admin content changes — so customer/guest UIs stay in sync.
+ *
+ * Default interval is intentionally calm (15s). Focus / tab-visible still
+ * probe immediately so publishes feel responsive without hammering the API.
  */
 export function useLiveWheelSync({
   enabled = true,
-  intervalMs = 2500,
+  intervalMs = 15000,
   onChange,
   onWheelChange,
 }) {
@@ -24,6 +27,7 @@ export function useLiveWheelSync({
     if (!enabled) return undefined
 
     let cancelled = false
+    let timer = 0
 
     const probe = async () => {
       if (cancelled || inFlightRef.current || document.hidden) return
@@ -49,12 +53,27 @@ export function useLiveWheelSync({
       }
     }
 
-    const timer = window.setInterval(probe, intervalMs)
-    const onFocus = () => { void probe() }
-    const onVisible = () => {
-      if (!document.hidden) void probe()
+    const schedule = () => {
+      window.clearInterval(timer)
+      timer = window.setInterval(() => {
+        void probe()
+      }, intervalMs)
     }
 
+    const onFocus = () => {
+      void probe()
+    }
+    const onVisible = () => {
+      if (document.hidden) {
+        window.clearInterval(timer)
+        timer = 0
+        return
+      }
+      schedule()
+      void probe()
+    }
+
+    schedule()
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onVisible)
     void probe()

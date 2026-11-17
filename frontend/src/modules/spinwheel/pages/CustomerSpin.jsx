@@ -42,6 +42,16 @@ function rewardCardHint(r) {
   return null
 }
 
+function WinSuccessMark() {
+  return (
+    <div className="win-success-mark" aria-hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20 6 9 17l-5-5" />
+      </svg>
+    </div>
+  )
+}
+
 export default function CustomerSpin() {
   const { user } = useAuth()
   const [tab, setTab] = useState('wheel')
@@ -223,15 +233,19 @@ export default function CustomerSpin() {
   const isMajor = result?.tier === 'major'
 
   const confettiPieces = useMemo(
-    () => Array.from({ length: 40 }).map((_, i) => ({
+    () => Array.from({ length: 42 }).map((_, i) => ({
       left: `${(i * 9 + 4) % 100}%`,
       delay: `${(i % 12) * 0.05}s`,
-      color: i % 3 === 0 ? '#e8d5a8' : i % 3 === 1 ? '#f3e6c8' : '#d4b896',
+      color: ['#1d4ed8', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#ffffff'][i % 6],
       w: 6 + (i % 4),
       h: 10 + (i % 5),
     })),
     [],
   )
+
+  const heroTitle = state?.wheel?.page_title || state?.wheel?.name || 'Spin & Win'
+  const heroCopy = state?.wheel?.subtitle
+    || 'Tap Spin to try your luck. Your prize is chosen securely by the rewards system.'
 
   return (
     <main className="cx-shell">
@@ -290,10 +304,8 @@ export default function CustomerSpin() {
 
       {tab === 'wheel' && (
         <section className="cx-card wheel-panel spin-stage">
-          <Title
-            title={state?.wheel?.page_title || state?.wheel?.name || 'Spin Wheel'}
-            onHelp={() => setShowHelp(true)}
-          />
+          <Title title={heroTitle} onHelp={() => setShowHelp(true)} />
+          <p className="spin-hero-copy">{heroCopy}</p>
 
           {showConfetti && (
             <>
@@ -341,17 +353,27 @@ export default function CustomerSpin() {
             </div>
           )}
 
-          <button
-            type="button"
-            className={`btn-spin ${spinning ? 'is-loading' : ''}`}
-            disabled={!canSpin}
-            onClick={() => setConfirmSpin(true)}
-          >
-            {spinning ? 'Spinning…' : state?.spins_remaining ? 'Spin Now' : 'No Spins Available'}
-          </button>
-          {!loading && !state?.spins_remaining && (
-            <p className="hint">Ask staff to grant spins in Admin.</p>
-          )}
+          <div className="spin-cta-wrap">
+            <motion.button
+              type="button"
+              className={`btn-spin ${spinning ? 'is-loading' : ''}`}
+              disabled={!canSpin}
+              onClick={() => setConfirmSpin(true)}
+              whileHover={canSpin ? { y: -2 } : undefined}
+              whileTap={canSpin ? { scale: 0.98 } : undefined}
+            >
+              {spinning ? 'Spinning…' : state?.spins_remaining ? 'Spin Now' : 'No Spins Available'}
+            </motion.button>
+            {!loading && (
+              <span className="spins-remaining-pill" aria-live="polite">
+                {state?.spins_remaining ?? 0} spin{(state?.spins_remaining ?? 0) === 1 ? '' : 's'} remaining
+              </span>
+            )}
+            {!loading && !state?.spins_remaining && (
+              <p className="hint">Ask staff to grant spins in Admin.</p>
+            )}
+            <p className="hint">Confirm once — your result is determined securely after you spin.</p>
+          </div>
         </section>
       )}
 
@@ -438,10 +460,20 @@ export default function CustomerSpin() {
         onConfirm={spin}
       />
 
-      <Modal open={showWin && !!result} onClose={() => setShowWin(false)} className={isMajor ? 'major-win' : ''}>
+      <Modal
+        open={showWin && !!result}
+        onClose={() => setShowWin(false)}
+        className={`win-modal-panel ${isMajor ? 'major-win' : ''}`.trim()}
+      >
         {result && (
-          <div className="reward-detail reward-detail--win">
-            <p className="cx-kicker">{isMajor ? 'Major prize' : 'You won'}</p>
+          <motion.div
+            className="reward-detail reward-detail--win"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ type: 'spring', stiffness: 280, damping: 24 }}
+          >
+            <WinSuccessMark />
+            <span className="win-modal-badge">{isMajor ? 'Major prize' : 'Congratulations!'}</span>
             <h2 className="cx-title reward-detail-title">{result.prize_label}</h2>
             {mediaUrl(result.image_url || result.image_path) ? (
               <img className="win-modal-art" src={mediaUrl(result.image_url || result.image_path)} alt="" />
@@ -466,7 +498,7 @@ export default function CustomerSpin() {
               </button>
               <button type="button" className="cx-ghost" onClick={() => setShowWin(false)}>Keep spinning</button>
             </div>
-          </div>
+          </motion.div>
         )}
       </Modal>
 

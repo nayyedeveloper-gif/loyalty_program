@@ -80,6 +80,16 @@ async function activateGuestLink(token) {
   return run
 }
 
+function WinSuccessMark() {
+  return (
+    <div className="win-success-mark" aria-hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20 6 9 17l-5-5" />
+      </svg>
+    </div>
+  )
+}
+
 function GuestStatusCard({ title, body, brandTitle, logoUrl }) {
   return (
     <main className="cx-shell guest-shell">
@@ -251,15 +261,19 @@ export default function GuestSpin() {
   const displayResult = result || state?.result
 
   const confettiPieces = useMemo(
-    () => Array.from({ length: 40 }).map((_, i) => ({
+    () => Array.from({ length: 42 }).map((_, i) => ({
       left: `${(i * 9 + 4) % 100}%`,
       delay: `${(i % 12) * 0.05}s`,
-      color: i % 3 === 0 ? '#e8d5a8' : i % 3 === 1 ? '#f3e6c8' : '#d4b896',
+      color: ['#1d4ed8', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#ffffff'][i % 6],
       w: 6 + (i % 4),
       h: 10 + (i % 5),
     })),
     [],
   )
+
+  const heroTitle = state?.wheel?.page_title || state?.wheel?.name || 'Spin & Win'
+  const heroCopy = state?.wheel?.subtitle
+    || 'One complimentary spin. Your prize is chosen securely when you confirm.'
 
   if (status === 'loading') {
     return (
@@ -316,10 +330,8 @@ export default function GuestSpin() {
       </AnimatePresence>
 
       <section className="cx-card wheel-panel spin-stage">
-        <Title
-          title={state?.wheel?.page_title || state?.wheel?.name || 'Guest Spin'}
-          onHelp={() => setShowHelp(true)}
-        />
+        <Title title={heroTitle} onHelp={() => setShowHelp(true)} />
+        <p className="spin-hero-copy">{heroCopy}</p>
 
         {showConfetti && (
           <>
@@ -366,34 +378,44 @@ export default function GuestSpin() {
           </p>
         )}
 
-        {canSpin && (
-          <button
-            type="button"
-            className={`btn-spin ${spinning ? 'is-loading' : ''}`}
-            disabled={!canSpin}
-            onClick={() => setConfirmSpin(true)}
-          >
-            {spinning ? 'Spinning…' : 'Spin Now'}
-          </button>
-        )}
-
-        {status === 'used' && displayResult && (
-          <div style={{ marginTop: 16, textAlign: 'center' }}>
-            <p><StatusBadge status={displayResult.display_status} label={displayResult.status_label} /></p>
-            <p style={{ marginTop: 8 }}>
-              Reference:{' '}
-              <strong style={{ color: 'var(--cx-ink)' }}>{displayResult.reward_code}</strong>
-            </p>
-            <button
+        <div className="spin-cta-wrap">
+          {canSpin && (
+            <motion.button
               type="button"
-              className="btn-spin"
-              style={{ marginTop: 12, minWidth: 160 }}
-              onClick={() => setShowWin(true)}
+              className={`btn-spin ${spinning ? 'is-loading' : ''}`}
+              disabled={!canSpin}
+              onClick={() => setConfirmSpin(true)}
+              whileHover={{ y: -2 }}
+              whileTap={{ scale: 0.98 }}
             >
-              View prize
-            </button>
-          </div>
-        )}
+              {spinning ? 'Spinning…' : 'Spin Now'}
+            </motion.button>
+          )}
+
+          {canSpin && (
+            <span className="spins-remaining-pill" aria-live="polite">
+              1 spin remaining
+            </span>
+          )}
+
+          {status === 'used' && displayResult && (
+            <div style={{ marginTop: 8, textAlign: 'center' }}>
+              <p><StatusBadge status={displayResult.display_status} label={displayResult.status_label} /></p>
+              <p style={{ marginTop: 8 }}>
+                Reference:{' '}
+                <strong style={{ color: 'var(--cx-ink)' }}>{displayResult.reward_code}</strong>
+              </p>
+              <button
+                type="button"
+                className="btn-spin"
+                style={{ marginTop: 12, minWidth: 160 }}
+                onClick={() => setShowWin(true)}
+              >
+                View prize
+              </button>
+            </div>
+          )}
+        </div>
       </section>
 
       <Modal open={showHelp} onClose={() => setShowHelp(false)}>
@@ -423,11 +445,17 @@ export default function GuestSpin() {
       <Modal
         open={showWin && !!displayResult}
         onClose={() => setShowWin(false)}
-        className={isMajor ? 'major-win' : ''}
+        className={`win-modal-panel ${isMajor ? 'major-win' : ''}`.trim()}
       >
         {displayResult && (
-          <div className="reward-detail reward-detail--win">
-            <p className="cx-kicker">{isMajor ? 'Major prize' : 'You won'}</p>
+          <motion.div
+            className="reward-detail reward-detail--win"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ type: 'spring', stiffness: 280, damping: 24 }}
+          >
+            <WinSuccessMark />
+            <span className="win-modal-badge">{isMajor ? 'Major prize' : 'Congratulations!'}</span>
             <h2 className="cx-title reward-detail-title">{displayResult.prize_label}</h2>
             {mediaUrl(displayResult.image_url || displayResult.image_path) ? (
               <img className="win-modal-art" src={mediaUrl(displayResult.image_url || displayResult.image_path)} alt="" />
@@ -456,7 +484,7 @@ export default function GuestSpin() {
             <button type="button" className="btn-spin" style={{ marginTop: 14 }} onClick={() => setShowWin(false)}>
               Done
             </button>
-          </div>
+          </motion.div>
         )}
       </Modal>
     </main>
