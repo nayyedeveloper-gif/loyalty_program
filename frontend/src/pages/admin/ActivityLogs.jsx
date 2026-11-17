@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import DateRangeFilter from '../../components/DateRangeFilter'
 import PageHeader from '../../components/PageHeader'
 import Pagination from '../../components/Pagination'
 import { useLanguage } from '../../context/LanguageContext'
@@ -12,14 +13,27 @@ export default function AdminActivityLogs() {
   const [meta, setMeta] = useState(null)
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebouncedValue(search, 300)
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
 
-  async function load(nextPage = 1, query = debouncedSearch) {
+  async function load(
+    nextPage = 1,
+    query = debouncedSearch,
+    nextDateFrom = dateFrom,
+    nextDateTo = dateTo,
+  ) {
     setLoading(true)
     try {
       const { data } = await api.get('/admin/activity-logs', {
-        params: { search: query || undefined, page: nextPage, per_page: 30 },
+        params: {
+          search: query || undefined,
+          date_from: nextDateFrom || undefined,
+          date_to: nextDateTo || undefined,
+          page: nextPage,
+          per_page: 30,
+        },
       })
       setItems(data.logs.data || [])
       setMeta(data.logs)
@@ -32,8 +46,8 @@ export default function AdminActivityLogs() {
   }
 
   useEffect(() => {
-    load(1, debouncedSearch)
-  }, [debouncedSearch])
+    load(1, debouncedSearch, dateFrom, dateTo)
+  }, [debouncedSearch, dateFrom, dateTo])
 
   return (
     <div className="space-y-5">
@@ -51,7 +65,7 @@ export default function AdminActivityLogs() {
         role="search"
         onSubmit={(e) => {
           e.preventDefault()
-          load(1, search.trim())
+          load(1, search.trim(), dateFrom, dateTo)
         }}
       >
         <label className="sr-only" htmlFor="log-search">{t('search')}</label>
@@ -61,6 +75,16 @@ export default function AdminActivityLogs() {
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t('searchActivityLogsPlaceholder')}
           autoComplete="off"
+        />
+        <DateRangeFilter
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          t={t}
+          lang={lang}
+          onChange={({ dateFrom: nextFrom, dateTo: nextTo }) => {
+            setDateFrom(nextFrom)
+            setDateTo(nextTo)
+          }}
         />
         <button type="submit" className="btn btn-ghost">
           {t('search')}

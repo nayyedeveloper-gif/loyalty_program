@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { AppSettingsProvider } from './context/AppSettingsContext'
 import { AuthProvider } from './context/AuthContext'
 import { LanguageProvider } from './context/LanguageContext'
+import { ChatProvider } from './context/ChatContext'
 import { NotificationProvider } from './context/NotificationContext'
 import { ThemeProvider } from './context/ThemeContext'
 import { initNativeShell } from './mobile/capacitorApp'
@@ -46,7 +47,9 @@ createRoot(document.getElementById('root')).render(
           <AppSettingsProvider>
             <AuthProvider>
               <NotificationProvider>
-                <App />
+                <ChatProvider>
+                  <App />
+                </ChatProvider>
               </NotificationProvider>
             </AuthProvider>
           </AppSettingsProvider>

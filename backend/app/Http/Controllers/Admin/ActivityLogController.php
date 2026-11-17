@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AdminActivityLog;
+use App\Support\DateRangeQuery;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -30,6 +31,8 @@ class ActivityLogController extends Controller
         if ($request->filled('action')) {
             $query->where('action', (string) $request->string('action'));
         }
+
+        DateRangeQuery::apply($query, $request);
 
         return response()->json([
             'logs' => $query->paginate((int) $request->integer('per_page', 30)),

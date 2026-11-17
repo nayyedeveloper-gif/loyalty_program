@@ -7,6 +7,7 @@ use App\Models\PointLedger;
 use App\Models\Purchase;
 use App\Models\User;
 use App\Services\AuditService;
+use App\Support\DateRangeQuery;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -83,12 +84,14 @@ class ExportController extends Controller
             });
         }
 
+        DateRangeQuery::applyCoalesce($query, $request, ['sold_at', 'created_at']);
+
         AuditService::log(
             $request->user(),
             'export_purchases',
             'Exported purchases CSV',
             null,
-            ['filters' => $request->only(['search'])],
+            ['filters' => $request->only(['search', 'date_from', 'date_to'])],
             $request,
         );
 
@@ -137,12 +140,14 @@ class ExportController extends Controller
             });
         }
 
+        DateRangeQuery::apply($query, $request);
+
         AuditService::log(
             $request->user(),
             'export_ledger',
             'Exported ledger CSV',
             null,
-            ['filters' => $request->only(['type', 'search'])],
+            ['filters' => $request->only(['type', 'search', 'date_from', 'date_to'])],
             $request,
         );
 

@@ -12,14 +12,47 @@ use App\Models\RewardRedemption;
 use App\Models\User;
 use App\Models\UserMissionProgress;
 use App\Services\PointsEngine;
+use App\Services\TierService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class SalesEntrySyncService
 {
+    /** @var array<int, true> */
+    private array $knownExternalIds = [];
+
+    /** @var array<string, array{id:int,phone:?string,nrc:?string,name:string}> */
+    private array $customersByPhone = [];
+
+    /** @var array<string, array{id:int,phone:?string,nrc:?string,name:string}> */
+    private array $customersByNrc = [];
+
+    /** @var array<int, true> */
+    private array $customerIds = [];
+
+    private int $nextCustomerSeq = 1;
+
+    private string $importPasswordHash = '';
+
+    /** @var list<array<string, mixed>> */
+    private array $pendingUsers = [];
+
+    /** @var list<array<string, mixed>> */
+    private array $pendingPurchases = [];
+
+    /** @var list<array<string, mixed>> */
+    private array $pendingLedger = [];
+
+    /** @var array<int, int> user_id => spend delta */
+    private array $spendDelta = [];
+
+    /** @var array<int, string> user_id => last activity iso */
+    private array $activityAt = [];
+
+    private int $flushSize = 250;
+
     public function __construct(private readonly SalesEntryClient $client) {}
 
     /**
@@ -78,20 +111,33 @@ class SalesEntrySyncService
         bool $full = false,
         ?callable $onProgress = null,
     ): array {
+        $this->prepareSqliteFastPath();
+        $this->bootCaches();
+
         $page = 1;
         $imported = 0;
         $skipped = 0;
         $customersCreated = 0;
         $consecutiveKnown = 0;
+        // Sales Entry caps page size at 200; always use the max for backfills.
+        $perPage = 200;
 
         do {
-            $payload = $this->client->fetchMasterSetup($page);
+            $payload = $this->client->fetchMasterSetup($page, $perPage);
             $rows = $payload['data'] ?? [];
             $pagination = $payload['pagination'] ?? [];
             $lastPage = (int) ($pagination['last_page'] ?? $page);
+            $total = (int) ($pagination['total'] ?? 0);
 
             if ($onProgress) {
-                $onProgress("Page {$page}/{$lastPage} (".count($rows).' rows)');
+                $onProgress(sprintf(
+                    'Page %d/%d (%d rows) · imported=%d customers=%d',
+                    $page,
+                    $lastPage,
+                    count($rows),
+                    $imported,
+                    count($this->customerIds),
+                ));
             }
 
             if (! count($rows)) {
@@ -115,24 +161,115 @@ class SalesEntrySyncService
                     continue;
                 }
 
-                if (Purchase::query()->where('external_id', $externalId)->exists()) {
+                if (isset($this->knownExternalIds[$externalId])) {
                     $skipped++;
                     $consecutiveKnown++;
-                    // Newest-first feed: incremental sync can stop once recent rows are already known.
-                    if (! $full && $maxPages === 0 && $consecutiveKnown >= 40) {
+                    if (! $full && $maxPages === 0 && $consecutiveKnown >= 80) {
+                        $this->flush(awardPoints: $awardPoints);
+                        $this->finalizeSpendAndTiers($awardPoints);
+
                         return compact('imported', 'skipped', 'customersCreated') + [
                             'pages' => $page,
                             'stopped_early' => true,
+                            'total_remote' => $total,
                         ];
                     }
                     continue;
                 }
 
                 $consecutiveKnown = 0;
-                $result = $this->importRowWithRetry($row, $side, $awardPoints);
-                $imported += $result['imported'] ? 1 : 0;
-                $skipped += $result['imported'] ? 0 : 1;
-                $customersCreated += $result['customer_created'] ? 1 : 0;
+                $amount = $this->moneyToInt($row['total_combined_value'] ?? $row['total_product_value'] ?? $row['product_value'] ?? 0);
+                if ($amount <= 0) {
+                    $skipped++;
+                    continue;
+                }
+
+                [$customerId, $created] = $this->resolveCustomerId($row);
+                if ($created) {
+                    $customersCreated++;
+                }
+
+                $productType = $this->mapProductCategory((string) ($row['product_category'] ?? ''));
+                $productName = trim((string) ($row['product_type'] ?? '')) ?: (string) ($row['product_code'] ?? 'Item');
+                $soldAt = $this->parseDateTime($row['created_at'] ?? null)
+                    ?: $this->parseDateTime($row['date'] ?? null)
+                    ?: now();
+                $soldAtStr = $soldAt->format('Y-m-d H:i:s');
+
+                $points = 0;
+                $snapshot = [
+                    'base_points' => 0,
+                    'tier_multiplier' => 1.0,
+                    'promo_multiplier' => 1.0,
+                    'points_earned' => 0,
+                    'tier_at_purchase' => 'Care',
+                    'payable' => $amount,
+                    'source' => 'salesentry',
+                    'external_id' => $externalId,
+                ];
+
+                if ($awardPoints && $side === 'sale') {
+                    // Base earn only during bulk sync (promos applied later via refresh if needed).
+                    $base = PointsEngine::basePointsFromAmount($amount);
+                    $points = $base;
+                    $snapshot['base_points'] = $base;
+                    $snapshot['points_earned'] = $base;
+                }
+
+                $this->pendingPurchases[] = [
+                    'external_id' => $externalId,
+                    'user_id' => $customerId,
+                    'product_name' => Str::limit($productName, 180, ''),
+                    'product_code' => Str::limit((string) ($row['product_code'] ?? 'N/A'), 80, ''),
+                    'voucher_number' => $row['voucher_number'] ?? null,
+                    'branch_name' => $row['branch_name'] ?? $row['shop_branch_number'] ?? null,
+                    'branch_id' => isset($row['branch_id']) ? (int) $row['branch_id'] : null,
+                    'transaction_side' => $side,
+                    'product_type' => $productType,
+                    'amount' => $amount,
+                    'discount_percent' => 0,
+                    'net_amount' => $amount,
+                    'points_earned' => $side === 'sale' ? $points : 0,
+                    'points_redeemed' => 0,
+                    'amount_offset_mmk' => 0,
+                    'earn_snapshot' => json_encode($snapshot),
+                    'payment_method' => $this->mapPaymentMethod($row),
+                    'sold_at' => $soldAtStr,
+                    'status' => 'recorded',
+                    'created_at' => $soldAtStr,
+                    'updated_at' => $soldAtStr,
+                ];
+
+                $this->knownExternalIds[$externalId] = true;
+
+                if ($side === 'sale') {
+                    $this->spendDelta[$customerId] = ($this->spendDelta[$customerId] ?? 0) + $amount;
+                    $this->activityAt[$customerId] = $soldAtStr;
+
+                    if ($awardPoints && $points > 0) {
+                        $this->pendingLedger[] = [
+                            'user_id' => $customerId,
+                            'type' => 'earn',
+                            'source' => 'purchase',
+                            'points' => $points,
+                            'tier_eligible' => 1,
+                            'purchase_external_id' => $externalId,
+                            'meta' => json_encode([
+                                'base_points' => $points,
+                                'payable' => $amount,
+                                'source' => 'salesentry',
+                            ]),
+                            'created_at' => $soldAtStr,
+                            'updated_at' => $soldAtStr,
+                        ];
+                    }
+                }
+
+                $imported++;
+
+                if (count($this->pendingPurchases) >= $this->flushSize) {
+                    $this->flush(awardPoints: $awardPoints);
+                }
             }
 
             $page++;
@@ -141,160 +278,131 @@ class SalesEntrySyncService
             }
         } while ($page <= $lastPage);
 
+        $this->flush(awardPoints: $awardPoints);
+        $this->finalizeSpendAndTiers($awardPoints);
+
+        if ($onProgress) {
+            $onProgress(sprintf(
+                'Finished. local_customers=%d local_purchases=%d',
+                User::query()->where('role', 'customer')->count(),
+                Purchase::query()->count(),
+            ));
+        }
+
         return compact('imported', 'skipped', 'customersCreated') + [
             'pages' => $page - 1,
             'stopped_early' => false,
+            'total_remote' => $total ?? 0,
         ];
     }
 
-    private function importRowWithRetry(array $row, string $side, bool $awardPoints, int $attempts = 5): array
+    private function prepareSqliteFastPath(): void
     {
-        $last = null;
-        for ($i = 1; $i <= $attempts; $i++) {
-            try {
-                return $this->importRow($row, $side, $awardPoints);
-            } catch (\Throwable $e) {
-                $last = $e;
-                $message = strtolower($e->getMessage());
-                if (! str_contains($message, 'database is locked') && ! str_contains($message, 'database locked')) {
-                    throw $e;
-                }
-                usleep(200_000 * $i);
-            }
+        if (DB::getDriverName() !== 'sqlite') {
+            return;
         }
 
-        throw $last ?? new \RuntimeException('Sales Entry import failed.');
+        try {
+            DB::statement('PRAGMA synchronous = OFF');
+            DB::statement('PRAGMA temp_store = MEMORY');
+            DB::statement('PRAGMA cache_size = -200000');
+            DB::statement('PRAGMA mmap_size = 268435456');
+        } catch (\Throwable) {
+            // Best-effort speedups only.
+        }
     }
 
-    private function importRow(array $row, string $side, bool $awardPoints): array
+    private function bootCaches(): void
     {
-        $amount = $this->moneyToInt($row['total_combined_value'] ?? $row['total_product_value'] ?? $row['product_value'] ?? 0);
-        if ($amount <= 0) {
-            return ['imported' => false, 'customer_created' => false];
+        $this->knownExternalIds = [];
+        foreach (DB::table('purchases')->whereNotNull('external_id')->pluck('external_id') as $id) {
+            $this->knownExternalIds[(int) $id] = true;
         }
 
-        $customerCreated = false;
+        $this->customersByPhone = [];
+        $this->customersByNrc = [];
+        $this->customerIds = [];
 
-        $purchase = DB::transaction(function () use ($row, $side, $awardPoints, $amount, &$customerCreated) {
-            [$customer, $created] = $this->findOrCreateCustomer($row);
-            $customerCreated = $created;
+        $rows = DB::table('users')
+            ->where('role', 'customer')
+            ->get(['id', 'phone', 'nrc_number', 'name']);
 
-            $productType = $this->mapProductCategory((string) ($row['product_category'] ?? ''));
-            $productName = trim((string) ($row['product_type'] ?? '')) ?: (string) ($row['product_code'] ?? 'Item');
-            $soldAt = $this->parseDateTime($row['created_at'] ?? null) ?: $this->parseDateTime($row['date'] ?? null) ?: now();
-
-            $earn = PointsEngine::computePurchaseEarn($customer, $amount, $productType);
-            $snapshot = [
-                'base_points' => $earn['base_points'],
-                'tier_multiplier' => $earn['tier_multiplier'],
-                'promo_multiplier' => $earn['promo_multiplier'],
-                'points_earned' => $earn['points'],
-                'tier_at_purchase' => $customer->tier,
-                'payable' => $amount,
-                'source' => 'salesentry',
-                'external_id' => (int) $row['id'],
+        foreach ($rows as $row) {
+            $entry = [
+                'id' => (int) $row->id,
+                'phone' => $row->phone,
+                'nrc' => $row->nrc_number,
+                'name' => (string) $row->name,
             ];
-
-            $purchase = new Purchase([
-                'external_id' => (int) $row['id'],
-                'user_id' => $customer->id,
-                'product_name' => Str::limit($productName, 180, ''),
-                'product_code' => Str::limit((string) ($row['product_code'] ?? 'N/A'), 80, ''),
-                'voucher_number' => $row['voucher_number'] ?? null,
-                'branch_name' => $row['branch_name'] ?? $row['shop_branch_number'] ?? null,
-                'branch_id' => isset($row['branch_id']) ? (int) $row['branch_id'] : null,
-                'transaction_side' => $side,
-                'product_type' => $productType,
-                'amount' => $amount,
-                'discount_percent' => 0,
-                'net_amount' => $amount,
-                'points_earned' => $side === 'sale' ? $earn['points'] : 0,
-                'points_redeemed' => 0,
-                'amount_offset_mmk' => 0,
-                'earn_snapshot' => $snapshot,
-                'payment_method' => $this->mapPaymentMethod($row),
-                'sold_at' => $soldAt,
-                'status' => 'recorded',
-            ]);
-            $purchase->created_at = $soldAt;
-            $purchase->updated_at = $soldAt;
-            $purchase->save();
-
-            if ($side === 'sale') {
-                $customer->total_spent = (int) $customer->total_spent + $amount;
-                $customer->save();
-
-                if ($awardPoints && $earn['points'] > 0) {
-                    PointsEngine::applyPurchasePoints(
-                        $customer,
-                        $purchase,
-                        $earn['points'],
-                        0,
-                        [
-                            'base_points' => $earn['base_points'],
-                            'tier_multiplier' => $earn['tier_multiplier'],
-                            'promo_multiplier' => $earn['promo_multiplier'],
-                            'payable' => $amount,
-                            'source' => 'salesentry',
-                        ],
-                        $soldAt,
-                        notifyTierChange: false,
-                    );
-                } else {
-                    PointsEngine::refreshUserBalances($customer, touchActivity: false);
-                }
+            $this->customerIds[$entry['id']] = true;
+            if ($entry['phone']) {
+                $this->customersByPhone[(string) $entry['phone']] = $entry;
             }
+            if ($entry['nrc']) {
+                $this->customersByNrc[(string) $entry['nrc']] = $entry;
+            }
+        }
 
-            return $purchase;
-        });
+        $latest = DB::table('users')
+            ->where('role', 'customer')
+            ->whereNotNull('customer_code')
+            ->where('customer_code', 'like', 'C%')
+            ->orderByDesc('id')
+            ->value('customer_code');
 
-        return [
-            'imported' => (bool) $purchase,
-            'customer_created' => $customerCreated,
-        ];
+        $this->nextCustomerSeq = 1;
+        if (is_string($latest) && preg_match('/^C(\d+)$/', $latest, $matches)) {
+            $this->nextCustomerSeq = ((int) $matches[1]) + 1;
+        }
+
+        // One cheap bcrypt for all imported placeholders (members reset/sign in via OTP later).
+        $this->importPasswordHash = password_hash('SalesEntryImportPlaceholder', PASSWORD_BCRYPT, ['cost' => 4]);
     }
 
     /**
-     * @return array{0: User, 1: bool}
+     * @return array{0:int,1:bool} [customerId, created]
      */
-    private function findOrCreateCustomer(array $row): array
+    private function resolveCustomerId(array $row): array
     {
         $name = trim((string) ($row['customer_name'] ?? '')) ?: 'Sales Entry Customer';
         $phone = $this->normalizePhone((string) ($row['phone_number'] ?? ''));
         $nrc = trim((string) ($row['nrc_number'] ?? '')) ?: null;
         $address = trim((string) ($row['address'] ?? '')) ?: null;
 
-        $query = User::query()->where('role', 'customer');
-        if ($phone !== '') {
-            $existing = (clone $query)->where('phone', $phone)->lockForUpdate()->first();
-            if ($existing) {
-                $this->touchCustomerProfile($existing, $name, $nrc, $address);
-                return [$existing, false];
-            }
+        if ($phone !== '' && isset($this->customersByPhone[$phone])) {
+            return [$this->customersByPhone[$phone]['id'], false];
         }
-
-        if ($nrc) {
-            $existing = (clone $query)->where('nrc_number', $nrc)->lockForUpdate()->first();
-            if ($existing) {
-                $this->touchCustomerProfile($existing, $name, $nrc, $address, $phone ?: null);
-                return [$existing, false];
-            }
+        if ($nrc && isset($this->customersByNrc[$nrc])) {
+            return [$this->customersByNrc[$nrc]['id'], false];
         }
 
         $emailSeed = $phone !== '' ? $phone : ($nrc ?: Str::lower(Str::slug($name)).'-'.($row['id'] ?? Str::random(6)));
         $email = 'se_'.substr(hash('sha256', $emailSeed), 0, 20).'@salesentry.local';
-
-        // Avoid rare collisions.
-        while (User::query()->where('email', $email)->exists()) {
+        while (DB::table('users')->where('email', $email)->exists() || $this->pendingHasEmail($email)) {
             $email = 'se_'.Str::lower(Str::random(20)).'@salesentry.local';
         }
 
         $uniquePhone = $phone !== '' ? $phone : ('09'.substr(preg_replace('/\D/', '', hash('sha256', $emailSeed)) ?: '0', 0, 9));
-        while (User::query()->where('phone', $uniquePhone)->exists()) {
+        while (
+            isset($this->customersByPhone[$uniquePhone])
+            || DB::table('users')->where('phone', $uniquePhone)->exists()
+            || $this->pendingHasPhone($uniquePhone)
+        ) {
             $uniquePhone = '09'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT);
         }
 
-        $customer = User::create([
+        $code = 'C'.str_pad((string) $this->nextCustomerSeq, 6, '0', STR_PAD_LEFT);
+        $this->nextCustomerSeq++;
+        $referral = 'R'.strtoupper(substr(md5($email.$code.uniqid('', true)), 0, 8));
+        $now = now()->format('Y-m-d H:i:s');
+
+        // Temporary negative ids until flush assigns real ids.
+        $tempId = -1 * (count($this->pendingUsers) + 1);
+
+        $this->pendingUsers[] = [
+            '_temp_id' => $tempId,
+            'customer_code' => $code,
+            'referral_code' => $referral,
             'name' => Str::limit($name, 120, ''),
             'email' => $email,
             'phone' => $uniquePhone,
@@ -303,41 +411,237 @@ class SalesEntrySyncService
             'role' => 'customer',
             'source' => 'salesentry',
             'tier' => 'Care',
-            'password' => Hash::make(Str::password(24)),
+            'password' => $this->importPasswordHash,
             'total_spent' => 0,
             'points' => 0,
             'redeemable_points' => 0,
-            'last_activity_at' => now(),
-        ]);
+            'tier_points_365d' => 0,
+            'login_streak' => 0,
+            'last_activity_at' => $now,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ];
 
-        return [$customer, true];
+        $entry = [
+            'id' => $tempId,
+            'phone' => $uniquePhone,
+            'nrc' => $nrc,
+            'name' => $name,
+        ];
+        $this->customersByPhone[$uniquePhone] = $entry;
+        if ($nrc) {
+            $this->customersByNrc[$nrc] = $entry;
+        }
+
+        return [$tempId, true];
     }
 
-    private function touchCustomerProfile(User $customer, string $name, ?string $nrc, ?string $address, ?string $phone = null): void
+    private function pendingHasEmail(string $email): bool
     {
-        $dirty = false;
-        if ($name && $customer->name !== $name) {
-            $customer->name = Str::limit($name, 120, '');
-            $dirty = true;
+        foreach ($this->pendingUsers as $user) {
+            if (($user['email'] ?? null) === $email) {
+                return true;
+            }
         }
-        if ($nrc && ! $customer->nrc_number) {
-            $customer->nrc_number = $nrc;
-            $dirty = true;
+
+        return false;
+    }
+
+    private function pendingHasPhone(string $phone): bool
+    {
+        foreach ($this->pendingUsers as $user) {
+            if (($user['phone'] ?? null) === $phone) {
+                return true;
+            }
         }
-        if ($address && ! $customer->address) {
-            $customer->address = Str::limit($address, 255, '');
-            $dirty = true;
+
+        return false;
+    }
+
+    private function flush(bool $awardPoints): void
+    {
+        if ($this->pendingUsers === [] && $this->pendingPurchases === []) {
+            return;
         }
-        if ($phone && ! $customer->phone) {
-            $customer->phone = $phone;
-            $dirty = true;
+
+        DB::transaction(function () use ($awardPoints) {
+            $tempToReal = [];
+
+            if ($this->pendingUsers !== []) {
+                foreach (array_chunk($this->pendingUsers, 200) as $chunk) {
+                    $insertRows = [];
+                    foreach ($chunk as $user) {
+                        $tempId = $user['_temp_id'];
+                        unset($user['_temp_id']);
+                        $insertRows[] = $user;
+                    }
+                    DB::table('users')->insert($insertRows);
+
+                    // Map temp ids via email (unique).
+                    $emails = array_column($insertRows, 'email');
+                    $created = DB::table('users')->whereIn('email', $emails)->get(['id', 'email', 'phone', 'nrc_number', 'name']);
+                    $byEmail = [];
+                    foreach ($created as $row) {
+                        $byEmail[$row->email] = $row;
+                    }
+                    foreach ($chunk as $user) {
+                        $real = $byEmail[$user['email']] ?? null;
+                        if (! $real) {
+                            continue;
+                        }
+                        $tempToReal[(int) $user['_temp_id']] = (int) $real->id;
+                        $entry = [
+                            'id' => (int) $real->id,
+                            'phone' => $real->phone,
+                            'nrc' => $real->nrc_number,
+                            'name' => (string) $real->name,
+                        ];
+                        $this->customerIds[$entry['id']] = true;
+                        if ($entry['phone']) {
+                            $this->customersByPhone[(string) $entry['phone']] = $entry;
+                        }
+                        if ($entry['nrc']) {
+                            $this->customersByNrc[(string) $entry['nrc']] = $entry;
+                        }
+                    }
+                }
+                $this->pendingUsers = [];
+            }
+
+            // Remap spend/activity/purchases/ledger from temp user ids.
+            if ($tempToReal !== []) {
+                $newSpend = [];
+                foreach ($this->spendDelta as $uid => $amount) {
+                    $mapped = $tempToReal[$uid] ?? $uid;
+                    $newSpend[$mapped] = ($newSpend[$mapped] ?? 0) + $amount;
+                }
+                $this->spendDelta = $newSpend;
+
+                $newActivity = [];
+                foreach ($this->activityAt as $uid => $at) {
+                    $mapped = $tempToReal[$uid] ?? $uid;
+                    $newActivity[$mapped] = $at;
+                }
+                $this->activityAt = $newActivity;
+
+                foreach ($this->pendingPurchases as &$purchase) {
+                    $uid = (int) $purchase['user_id'];
+                    if (isset($tempToReal[$uid])) {
+                        $purchase['user_id'] = $tempToReal[$uid];
+                    }
+                }
+                unset($purchase);
+
+                foreach ($this->pendingLedger as &$ledger) {
+                    $uid = (int) $ledger['user_id'];
+                    if (isset($tempToReal[$uid])) {
+                        $ledger['user_id'] = $tempToReal[$uid];
+                    }
+                }
+                unset($ledger);
+            }
+
+            if ($this->pendingPurchases !== []) {
+                foreach (array_chunk($this->pendingPurchases, 200) as $chunk) {
+                    DB::table('purchases')->insert($chunk);
+                }
+
+                if ($awardPoints && $this->pendingLedger !== []) {
+                    $externalIds = array_values(array_unique(array_map(
+                        fn ($row) => (int) $row['purchase_external_id'],
+                        $this->pendingLedger,
+                    )));
+                    $purchaseIds = DB::table('purchases')
+                        ->whereIn('external_id', $externalIds)
+                        ->pluck('id', 'external_id');
+
+                    $ledgerRows = [];
+                    foreach ($this->pendingLedger as $row) {
+                        $purchaseId = $purchaseIds[$row['purchase_external_id']] ?? null;
+                        if (! $purchaseId) {
+                            continue;
+                        }
+                        $ledgerRows[] = [
+                            'user_id' => $row['user_id'],
+                            'type' => $row['type'],
+                            'source' => $row['source'],
+                            'points' => $row['points'],
+                            'tier_eligible' => $row['tier_eligible'],
+                            'purchase_id' => $purchaseId,
+                            'meta' => $row['meta'],
+                            'created_at' => $row['created_at'],
+                            'updated_at' => $row['updated_at'],
+                        ];
+                    }
+                    foreach (array_chunk($ledgerRows, 200) as $chunk) {
+                        DB::table('point_ledger')->insert($chunk);
+                    }
+                }
+
+                $this->pendingPurchases = [];
+                $this->pendingLedger = [];
+            }
+        });
+    }
+
+    private function finalizeSpendAndTiers(bool $awardPoints = false): void
+    {
+        if ($this->spendDelta !== []) {
+            foreach ($this->spendDelta as $userId => $delta) {
+                if ($delta <= 0 || $userId <= 0) {
+                    continue;
+                }
+                $activity = $this->activityAt[$userId] ?? null;
+                $payload = [
+                    'total_spent' => DB::raw('total_spent + '.(int) $delta),
+                    'updated_at' => now()->format('Y-m-d H:i:s'),
+                ];
+                if ($activity) {
+                    $payload['last_activity_at'] = $activity;
+                }
+                DB::table('users')->where('id', $userId)->update($payload);
+            }
+            $this->spendDelta = [];
+            $this->activityAt = [];
         }
-        if ($customer->source !== 'salesentry') {
-            $customer->source = 'salesentry';
-            $dirty = true;
+
+        // Assign tiers from lifetime spend. Wallet recompute only when points were awarded.
+        $tiers = TierService::tiers()->values();
+        $touchedIds = array_keys($this->customerIds);
+        if ($touchedIds === []) {
+            return;
         }
-        if ($dirty) {
-            $customer->save();
+
+        foreach (array_chunk($touchedIds, 500) as $idChunk) {
+            $users = DB::table('users')->whereIn('id', $idChunk)->get(['id', 'total_spent']);
+            $wallets = [];
+            if ($awardPoints) {
+                $wallets = DB::table('point_ledger')
+                    ->whereIn('user_id', $idChunk)
+                    ->groupBy('user_id')
+                    ->selectRaw('user_id, COALESCE(SUM(points), 0) as wallet')
+                    ->pluck('wallet', 'user_id');
+            }
+
+            foreach ($users as $user) {
+                $tier = 'Care';
+                $spend = (int) $user->total_spent;
+                foreach ($tiers as $row) {
+                    if ($spend >= (int) $row->min_spend_mmk) {
+                        $tier = $row->name;
+                    }
+                }
+                $update = [
+                    'tier' => $tier,
+                    'updated_at' => now()->format('Y-m-d H:i:s'),
+                ];
+                if ($awardPoints) {
+                    $wallet = max(0, (int) ($wallets[$user->id] ?? 0));
+                    $update['points'] = $wallet;
+                    $update['redeemable_points'] = $wallet;
+                }
+                DB::table('users')->where('id', $user->id)->update($update);
+            }
         }
     }
 

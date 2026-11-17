@@ -35,4 +35,13 @@ return [
         ],
     ],
 
+    'gif' => [
+        // auto | gifsnap | klipy | giphy | tenor
+        // auto uses KLIPY/GIPHY/TENOR if set, otherwise keyless GifSnap
+        'provider' => env('GIF_PROVIDER', 'auto'),
+        'klipy_key' => env('KLIPY_APP_KEY'),
+        'giphy_key' => env('GIPHY_API_KEY'),
+        'tenor_key' => env('TENOR_API_KEY'),
+    ],
+
 ];

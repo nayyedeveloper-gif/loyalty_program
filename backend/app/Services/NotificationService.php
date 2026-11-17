@@ -157,4 +157,14 @@ class NotificationService
             ['feedback_id' => $feedbackId, 'subject' => $subject, 'status' => $status],
         );
     }
+
+    public static function chatMessage(
+        User $user,
+        int $conversationId,
+        string $fromName,
+        string $preview,
+        bool $fromCustomer = false,
+    ): void {
+        // Chat stays in the messenger unread badge — no bell notifications.
+    }
 }

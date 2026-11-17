@@ -9,6 +9,7 @@ use App\Models\RewardRedemption;
 use App\Models\User;
 use App\Services\AuditService;
 use App\Services\PointsEngine;
+use App\Support\DateRangeQuery;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -44,6 +45,8 @@ class RedemptionController extends Controller
                     });
             });
         }
+
+        DateRangeQuery::apply($query, $request);
 
         return response()->json([
             'redemptions' => $query->paginate((int) $request->integer('per_page', 20)),

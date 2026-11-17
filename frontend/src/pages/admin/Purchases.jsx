@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import ConfirmModal from '../../components/ConfirmModal'
+import DateRangeFilter from '../../components/DateRangeFilter'
 import Modal from '../../components/Modal'
 import PageHeader from '../../components/PageHeader'
 import Pagination from '../../components/Pagination'
@@ -49,13 +50,15 @@ function newIdempotencyKey() {
 
 export default function AdminPurchases() {
   const { isAdmin } = useAuth()
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const [purchases, setPurchases] = useState([])
   const [meta, setMeta] = useState(null)
   const [page, setPage] = useState(1)
   const [customers, setCustomers] = useState([])
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebouncedValue(search, 300)
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
@@ -70,16 +73,22 @@ export default function AdminPurchases() {
   const [cancelReason, setCancelReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [exporting, setExporting] = useState(false)
-  const [syncing, setSyncing] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
-  async function loadPurchases(nextPage = page, query = debouncedSearch) {
+  async function loadPurchases(
+    nextPage = page,
+    query = debouncedSearch,
+    nextDateFrom = dateFrom,
+    nextDateTo = dateTo,
+  ) {
     setLoading(true)
     try {
       const { data } = await api.get('/admin/purchases', {
         params: {
           search: query || undefined,
+          date_from: nextDateFrom || undefined,
+          date_to: nextDateTo || undefined,
           page: nextPage,
           per_page: 20,
         },
@@ -105,11 +114,11 @@ export default function AdminPurchases() {
   }, [t])
 
   useEffect(() => {
-    loadPurchases(1, debouncedSearch).catch((err) => {
+    loadPurchases(1, debouncedSearch, dateFrom, dateTo).catch((err) => {
       setError(getErrorMessage(err, t('somethingWrong')))
       setLoading(false)
     })
-  }, [debouncedSearch])
+  }, [debouncedSearch, dateFrom, dateTo])
 
   function resolveMemberCode(raw, nextUserId) {
     const code = normalizeMemberCode(raw)
@@ -248,7 +257,11 @@ export default function AdminPurchases() {
     try {
       await downloadCsv(
         '/admin/export/purchases',
-        { search: search || undefined },
+        {
+          search: search || undefined,
+          date_from: dateFrom || undefined,
+          date_to: dateTo || undefined,
+        },
         'purchases.csv',
       )
       setMessage(t('exportStarted'))
@@ -256,33 +269,6 @@ export default function AdminPurchases() {
       setError(getErrorMessage(err, t('couldNotExport')))
     } finally {
       setExporting(false)
-    }
-  }
-
-  async function onSyncSalesEntry() {
-    if (!isAdmin) return
-    setSyncing(true)
-    setError('')
-    setMessage('')
-    try {
-      const { data } = await api.post('/admin/salesentry/sync', {
-        fresh: false,
-        sales_only: true,
-        award_points: true,
-        max_pages: 5,
-      })
-      const stats = data.stats || {}
-      setMessage(
-        t('salesEntrySyncDone', {
-          imported: stats.imported ?? 0,
-          customers: stats.customersCreated ?? 0,
-        }),
-      )
-      await Promise.all([loadPurchases(1), loadCustomers()])
-    } catch (err) {
-      setError(getErrorMessage(err, t('couldNotSyncSalesEntry')))
-    } finally {
-      setSyncing(false)
     }
   }
 
@@ -295,12 +281,6 @@ export default function AdminPurchases() {
         icon={faBoxOpen}
         actions={(
           <div className="action-row">
-            {isAdmin && (
-              <button type="button" className="btn btn-ghost" onClick={onSyncSalesEntry} disabled={syncing}>
-                <FontAwesomeIcon icon={faDownload} aria-hidden="true" />
-                {syncing ? t('syncingSalesEntry') : t('syncSalesEntry')}
-              </button>
-            )}
             {isAdmin && (
               <button type="button" className="btn btn-ghost" onClick={onExport} disabled={exporting}>
                 <FontAwesomeIcon icon={faDownload} aria-hidden="true" />
@@ -332,6 +312,16 @@ export default function AdminPurchases() {
           placeholder={t('searchPurchases')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+        />
+        <DateRangeFilter
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          t={t}
+          lang={lang}
+          onChange={({ dateFrom: nextFrom, dateTo: nextTo }) => {
+            setDateFrom(nextFrom)
+            setDateTo(nextTo)
+          }}
         />
         <button className="btn btn-ghost" type="submit">
           <FontAwesomeIcon icon={faMagnifyingGlass} aria-hidden="true" />
