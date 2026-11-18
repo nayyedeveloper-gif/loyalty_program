@@ -31,7 +31,7 @@ class CustomerController extends Controller
             $query->where('tier', $tier);
         }
 
-        $perPage = min(200, max(1, (int) $request->input('per_page', 20)));
+        $perPage = $this->perPage($request, 20, 200);
 
         return response()->json([
             'customers' => $query->paginate($perPage),
@@ -74,7 +74,13 @@ class CustomerController extends Controller
     {
         abort_unless($customer->isCustomer(), 404);
 
-        $customer->load(['purchases' => fn ($q) => $q->latest()]);
+        $customer->loadCount('purchases');
+        $customer->load([
+            'purchases' => fn ($q) => $q->latest()->limit(20)->select([
+                'id', 'user_id', 'product_name', 'product_code', 'amount', 'net_amount',
+                'points_earned', 'sold_at', 'created_at', 'status',
+            ]),
+        ]);
 
         return response()->json(['customer' => $customer]);
     }

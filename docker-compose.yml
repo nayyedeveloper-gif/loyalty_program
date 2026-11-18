@@ -1,0 +1,24 @@
+# Local / staging MySQL for Laravel backend (low footprint).
+# Usage: docker compose up -d
+# Then set backend/.env DB_* to match MYSQL_* below and run migrations.
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    ports:
+      - '3306:3306'
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: loyalty
+      MYSQL_USER: loyalty
+      MYSQL_PASSWORD: loyalty
+    volumes:
+      - loyalty_mysql:/var/lib/mysql
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', '127.0.0.1', '-uroot', '-proot']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  loyalty_mysql:

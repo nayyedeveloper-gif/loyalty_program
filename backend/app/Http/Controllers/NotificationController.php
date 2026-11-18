@@ -14,7 +14,7 @@ class NotificationController extends Controller
             ->where('user_id', $request->user()->id)
             ->where('type', '!=', 'chat_message')
             ->latest()
-            ->paginate((int) $request->integer('per_page', 20));
+            ->paginate($this->perPage($request, 20, 100));
 
         $unread = AppNotification::query()
             ->where('user_id', $request->user()->id)

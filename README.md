@@ -10,11 +10,34 @@ Modern loyalty / membership app for a Myanmar jewellery shop.
 
 ## Quick start
 
-### Backend
+### Backend (MySQL)
+Use [Docker](https://www.docker.com/) for a local database, or any MySQL 8+ host.
+
 ```bash
+# from repo root — optional local DB
+docker compose up -d
+
 cd backend
+cp .env.example .env   # if needed
+php artisan key:generate
+php artisan migrate
+php artisan db:seed
+
+# one-time copy from old SQLite (if you still have database/database.sqlite)
+php artisan db:import-sqlite --truncate
+
 php artisan serve
 ```
+
+API docs (Swagger UI, local by default): http://127.0.0.1:8000/docs/api — OpenAPI JSON at `/docs/api.json`.
+
+Purchases and customer names are filled from Sales Entry:
+
+```bash
+php artisan loyalty:sync-salesentry --fresh --full
+```
+
+Set `SALESENTRY_API_KEY` in `backend/.env` first.
 
 ### Frontend
 ```bash

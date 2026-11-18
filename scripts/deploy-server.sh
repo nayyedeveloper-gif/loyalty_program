@@ -4,6 +4,12 @@ set -euo pipefail
 APP_DIR=/var/www/loyalty
 URL=http://206.189.153.151:8080
 
+DB_HOST="${LOYALTY_DB_HOST:-127.0.0.1}"
+DB_PORT="${LOYALTY_DB_PORT:-3306}"
+DB_DATABASE="${LOYALTY_DB_DATABASE:-loyalty}"
+DB_USERNAME="${LOYALTY_DB_USERNAME:-loyalty}"
+DB_PASSWORD="${LOYALTY_DB_PASSWORD:-loyalty}"
+
 cd "$APP_DIR/backend"
 [ -f .env ] || cp .env.example .env
 
@@ -15,9 +21,18 @@ if grep -q '^FRONTEND_URL=' .env; then
 else
   echo "FRONTEND_URL=${URL}" >> .env
 fi
-sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=sqlite/' .env
 
-touch database/database.sqlite
+sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=mysql/' .env
+sed -i "s/^DB_HOST=.*/DB_HOST=${DB_HOST}/" .env
+sed -i "s/^DB_PORT=.*/DB_PORT=${DB_PORT}/" .env
+sed -i "s/^DB_DATABASE=.*/DB_DATABASE=${DB_DATABASE}/" .env
+sed -i "s/^DB_USERNAME=.*/DB_USERNAME=${DB_USERNAME}/" .env
+sed -i "s/^DB_PASSWORD=.*/DB_PASSWORD=${DB_PASSWORD}/" .env
+
+if command -v mysqladmin >/dev/null 2>&1; then
+  mysqladmin ping -h "$DB_HOST" --silent
+fi
+
 php artisan key:generate --force
 php artisan migrate --force
 php artisan db:seed --force || true
@@ -25,8 +40,8 @@ php artisan storage:link || true
 php artisan config:cache
 php artisan route:cache
 
-chown -R www-data:www-data storage bootstrap/cache database
-chmod -R ug+rwx storage bootstrap/cache database
+chown -R www-data:www-data storage bootstrap/cache
+chmod -R ug+rwx storage bootstrap/cache
 echo "BACKEND_OK"
 
 cd "$APP_DIR/frontend"
@@ -45,12 +60,23 @@ server {
     root /var/www/loyalty/frontend/dist;
     index index.html;
 
+    location ^~ /docs {
+        include fastcgi_params;
+        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME /var/www/loyalty/backend/public/index.php;
+        fastcgi_param SCRIPT_NAME /index.php;
+        fastcgi_param REQUEST_URI $request_uri;
+        fastcgi_param QUERY_STRING $query_string;
+    }
+
     location ^~ /api {
         include fastcgi_params;
         fastcgi_pass unix:/run/php/php8.3-fpm.sock;
         fastcgi_param SCRIPT_FILENAME /var/www/loyalty/backend/public/index.php;
         fastcgi_param SCRIPT_NAME /index.php;
         fastcgi_param REQUEST_URI $request_uri;
+        fastcgi_param QUERY_STRING $query_string;
+        fastcgi_read_timeout 120s;
     }
 
     location ^~ /sanctum {
@@ -59,13 +85,24 @@ server {
         fastcgi_param SCRIPT_FILENAME /var/www/loyalty/backend/public/index.php;
         fastcgi_param SCRIPT_NAME /index.php;
         fastcgi_param REQUEST_URI $request_uri;
+        fastcgi_param QUERY_STRING $query_string;
+        fastcgi_read_timeout 120s;
+    }
+
+    location ^~ /up {
+        include fastcgi_params;
+        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME /var/www/loyalty/backend/public/index.php;
+        fastcgi_param SCRIPT_NAME /index.php;
+        fastcgi_param REQUEST_URI $request_uri;
+        fastcgi_param QUERY_STRING $query_string;
     }
 
     location ^~ /storage/ {
         alias /var/www/loyalty/backend/storage/app/public/;
         try_files $uri =404;
         expires 7d;
-        add_header Cache-Control "public";
+        add_header Cache-Control 'public';
     }
 
     location / {

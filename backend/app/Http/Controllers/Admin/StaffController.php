@@ -37,7 +37,7 @@ class StaffController extends Controller
         }
 
         return response()->json([
-            'staff' => $query->paginate((int) $request->integer('per_page', 20)),
+            'staff' => $query->paginate($this->perPage($request, 20, 200)),
         ]);
     }
 

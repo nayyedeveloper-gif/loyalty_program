@@ -201,7 +201,7 @@ class AuthController extends Controller
 
         $payload = ['message' => 'If that email exists, an OTP has been sent.'];
 
-        if (app()->environment('local')) {
+        if (app()->isLocal() && config('app.debug')) {
             $payload['debug_otp'] = $otp;
         }
 

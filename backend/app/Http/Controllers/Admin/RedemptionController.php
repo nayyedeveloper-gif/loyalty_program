@@ -49,7 +49,7 @@ class RedemptionController extends Controller
         DateRangeQuery::apply($query, $request);
 
         return response()->json([
-            'redemptions' => $query->paginate((int) $request->integer('per_page', 20)),
+            'redemptions' => $query->paginate($this->perPage($request, 20, 200)),
         ]);
     }
 

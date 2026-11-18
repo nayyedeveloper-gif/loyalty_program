@@ -27,7 +27,7 @@ class FaqController extends Controller
             $query->where('is_active', filter_var($request->input('active'), FILTER_VALIDATE_BOOLEAN));
         }
 
-        $faqs = $query->paginate((int) $request->integer('per_page', 50));
+        $faqs = $query->paginate($this->perPage($request, 50, 200));
 
         return response()->json(['faqs' => $faqs]);
     }

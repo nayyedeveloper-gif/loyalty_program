@@ -40,7 +40,7 @@ class PurchaseController extends Controller
 
         DateRangeQuery::applyCoalesce($query, $request, ['sold_at', 'created_at']);
 
-        $perPage = min(200, max(1, (int) $request->input('per_page', 20)));
+        $perPage = $this->perPage($request, 20, 200);
 
         return response()->json([
             'purchases' => $query->paginate($perPage),

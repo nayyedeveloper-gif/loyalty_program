@@ -35,7 +35,7 @@ class ReferralController extends Controller
             });
         }
 
-        $referrers = $query->paginate((int) $request->integer('per_page', 20));
+        $referrers = $query->paginate($this->perPage($request, 20, 200));
 
         $bonusPaid = (int) PointLedger::query()
             ->where('source', 'referral')
