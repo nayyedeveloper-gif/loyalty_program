@@ -7,17 +7,9 @@ class AppBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
+    final palette = AppPalette.of(context);
     return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: dark
-            ? const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFF0D1730), Color(0xFF0A1222)],
-              )
-            : AppColors.gradientApp,
-      ),
+      decoration: BoxDecoration(gradient: palette.appGradient),
       child: child,
     );
   }
@@ -126,10 +118,10 @@ class EmptyState extends StatelessWidget {
               width: 72,
               height: 72,
               decoration: BoxDecoration(
-                color: AppColors.primarySoft.withValues(alpha: 0.55),
+                color: AppPalette.of(context).primarySoft.withValues(alpha: 0.55),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, size: 34, color: AppColors.primaryDark),
+              child: Icon(icon, size: 34, color: AppColors.primaryLight),
             ),
             const SizedBox(height: 14),
             Text(message, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium),
@@ -246,11 +238,11 @@ class StatCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     label.toUpperCase(),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 0.7,
-                      color: AppColors.muted,
+                      color: AppPalette.of(context).muted,
                     ),
                   ),
                 ),
@@ -276,35 +268,23 @@ class BrandMark extends StatelessWidget {
   final bool showText;
   final bool light;
 
+  static const String logoAsset = 'assets/brand/29-logo.png';
+
   @override
   Widget build(BuildContext context) {
-    final titleColor = light ? Colors.white : AppColors.ink;
-    final subColor = light ? Colors.white70 : AppColors.muted;
+    final palette = AppPalette.of(context);
+    final titleColor = light ? Colors.white : palette.ink;
+    final subColor = light ? Colors.white70 : palette.muted;
     return Column(
       children: [
-        Container(
+        SizedBox(
           width: size,
           height: size,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: AppColors.gradientPrimary,
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.35),
-                blurRadius: 18,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Center(
-            child: Text(
-              '29',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: size * 0.32,
-              ),
-            ),
+          child: Image.asset(
+            logoAsset,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.high,
+            semanticLabel: '29 Jewellery',
           ),
         ),
         if (showText) ...[
@@ -384,7 +364,8 @@ class SettingsTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = danger ? AppColors.danger : AppColors.ink;
+    final palette = AppPalette.of(context);
+    final color = danger ? AppColors.danger : palette.ink;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
@@ -400,7 +381,7 @@ class SettingsTile extends StatelessWidget {
         ),
         title: Text(title, style: TextStyle(fontWeight: FontWeight.w600, color: color, fontSize: 14)),
         subtitle: subtitle == null ? null : Text(subtitle!, style: Theme.of(context).textTheme.bodySmall),
-        trailing: trailing ?? const Icon(Icons.chevron_right, color: AppColors.muted),
+        trailing: trailing ?? Icon(Icons.chevron_right, color: palette.muted),
       ),
     );
   }

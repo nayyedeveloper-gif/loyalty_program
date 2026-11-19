@@ -117,8 +117,25 @@ class _RewardsScreenState extends State<RewardsScreen> with SingleTickerProvider
           : Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text('${t('balance')}: ${formatPoints(balance)} ${t('points')}'),
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(t('yourBalance'), style: const TextStyle(color: AppColors.onSoft, fontWeight: FontWeight.w700)),
+                        const Spacer(),
+                        Text(
+                          '${formatPoints(balance)} ${t('points')}',
+                          style: const TextStyle(color: AppColors.onSoft, fontWeight: FontWeight.w800, fontSize: 16),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
                 if (error != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: ErrorBanner(message: error!)),
                 if (message != null)
@@ -241,13 +258,25 @@ class _MissionsScreenState extends State<MissionsScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(m.title, style: Theme.of(context).textTheme.titleMedium),
-                                if (m.description != null) Text(m.description!),
+                                Text(m.title, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink, fontSize: 16)),
+                                if (m.description != null)
+                                  Text(m.description!, style: const TextStyle(color: AppColors.inkSoft)),
                                 const SizedBox(height: 8),
-                                LinearProgressIndicator(value: m.progressRatio),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(99),
+                                  child: LinearProgressIndicator(
+                                    value: m.progressRatio,
+                                    minHeight: 8,
+                                    backgroundColor: AppColors.surface2,
+                                    color: m.progressRatio >= 1 ? AppColors.ok : AppColors.primary,
+                                  ),
+                                ),
                                 const SizedBox(height: 6),
-                                Text('${formatPoints(m.progress)} / ${formatPoints(m.goalTarget)} · +${formatPoints(m.bonusPoints)} ${t('points')}'),
-                                Text(m.status),
+                                Text(
+                                  '${formatPoints(m.progress)} / ${formatPoints(m.goalTarget)} · +${formatPoints(m.bonusPoints)} ${t('points')}',
+                                  style: const TextStyle(color: AppColors.inkSoft, fontWeight: FontWeight.w600),
+                                ),
+                                Text(m.status, style: const TextStyle(color: AppColors.primaryDark, fontWeight: FontWeight.w700)),
                               ],
                             ),
                           ),
@@ -291,7 +320,12 @@ class CommunityScreen extends StatelessWidget {
           FilledButton.icon(
             onPressed: code.isEmpty
                 ? null
-                : () => SharePlus.instance.share(ShareParams(text: 'Join 29 Gold & Jewellery with my code: $code')),
+                : () {
+                    final url = '${AppConfig.mediaOrigin}/signup?ref=${Uri.encodeComponent(code)}';
+                    SharePlus.instance.share(
+                      ShareParams(text: 'Join 29 Gold & Jewellery with my code: $code\n$url'),
+                    );
+                  },
             icon: const Icon(Icons.share),
             label: Text(t('share')),
           ),
@@ -299,7 +333,12 @@ class CommunityScreen extends StatelessWidget {
           OutlinedButton.icon(
             onPressed: code.isEmpty
                 ? null
-                : () => launchUrl(Uri.parse('https://wa.me/?text=${Uri.encodeComponent('Join 29 Gold with code $code')}')),
+                : () {
+                    final url = '${AppConfig.mediaOrigin}/signup?ref=${Uri.encodeComponent(code)}';
+                    launchUrl(Uri.parse(
+                      'https://wa.me/?text=${Uri.encodeComponent('Join 29 Gold with code $code\n$url')}',
+                    ));
+                  },
             icon: const Icon(Icons.chat),
             label: const Text('WhatsApp'),
           ),
@@ -501,10 +540,10 @@ class SettingsScreen extends StatelessWidget {
                 backgroundImage: user?.avatarUrl != null && user!.avatarUrl!.isNotEmpty
                     ? CachedNetworkImageProvider(AppConfig.mediaUrl(user.avatarUrl))
                     : null,
-                backgroundColor: AppColors.primarySoft,
+                backgroundColor: AppPalette.of(context).primarySoft,
                 child: user?.avatarUrl == null || user!.avatarUrl!.isEmpty
                     ? Text((user?.name.isNotEmpty == true ? user!.name[0] : '?').toUpperCase(),
-                        style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.primaryDark))
+                        style: TextStyle(fontWeight: FontWeight.w800, color: AppPalette.of(context).onSoft))
                     : null,
               ),
               title: Text(user?.name ?? '', style: const TextStyle(fontWeight: FontWeight.w700)),

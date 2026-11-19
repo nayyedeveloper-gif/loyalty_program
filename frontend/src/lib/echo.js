@@ -41,16 +41,19 @@ export function connectEcho(token) {
 
   window.Pusher = Pusher
 
-  const scheme = import.meta.env.VITE_REVERB_SCHEME || 'http'
-  const port = Number(import.meta.env.VITE_REVERB_PORT || 8080)
-  const forceTLS = scheme === 'https'
+  const configuredScheme = import.meta.env.VITE_REVERB_SCHEME
+  const pageIsHttps = typeof window !== 'undefined' && window.location.protocol === 'https:'
+  const forceTLS = pageIsHttps || configuredScheme === 'https'
+  const defaultPort = forceTLS ? 443 : 80
+  const configuredPort = Number(import.meta.env.VITE_REVERB_PORT || 0)
+  const port = configuredPort > 0 ? configuredPort : defaultPort
 
   echoInstance = new Echo({
     broadcaster: 'reverb',
     key,
     wsHost: resolveHost(),
-    wsPort: port,
-    wssPort: port,
+    wsPort: forceTLS ? 443 : port,
+    wssPort: forceTLS ? 443 : port,
     forceTLS,
     enabledTransports: ['ws', 'wss'],
     authEndpoint: '/api/broadcasting/auth',

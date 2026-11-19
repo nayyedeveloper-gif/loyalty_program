@@ -6,18 +6,30 @@ class NotificationProvider extends ChangeNotifier {
 
   final AuthProvider auth;
   int unread = 0;
+  int chatUnread = 0;
+
+  int get totalUnread => unread + chatUnread;
 
   Future<void> refreshUnread() async {
     if (!auth.isCustomer) {
       unread = 0;
+      chatUnread = 0;
       notifyListeners();
       return;
     }
     try {
-      final data = await auth.api.get('/notifications/unread-count');
-      unread = data['count'] is int
-          ? data['count'] as int
-          : int.tryParse('${data['unread'] ?? data['count']}') ?? 0;
+      final results = await Future.wait([
+        auth.api.get('/notifications/unread-count'),
+        auth.api.get('/chat/unread-count'),
+      ]);
+      final n = results[0];
+      final c = results[1];
+      unread = n['count'] is int
+          ? n['count'] as int
+          : int.tryParse('${n['unread'] ?? n['count']}') ?? 0;
+      chatUnread = c['unread_count'] is int
+          ? c['unread_count'] as int
+          : int.tryParse('${c['unread_count'] ?? c['count']}') ?? 0;
       notifyListeners();
     } catch (_) {}
   }

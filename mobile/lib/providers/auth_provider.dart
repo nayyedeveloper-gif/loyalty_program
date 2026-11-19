@@ -25,6 +25,14 @@ class AuthProvider extends ChangeNotifier {
 
   bool get isLoggedIn => user != null;
   bool get isCustomer => user?.isCustomer == true;
+  bool get isPortalUser => user?.isAdmin == true || user?.isStaff == true;
+  bool get isAdmin => user?.isAdmin == true;
+
+  String get homeRoute {
+    if (isCustomer) return '/app';
+    if (isPortalUser) return '/admin';
+    return '/landing';
+  }
 
   Future<void> restore() async {
     loading = true;

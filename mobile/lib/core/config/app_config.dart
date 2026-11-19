@@ -1,23 +1,29 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 class AppConfig {
-  /// Override with:
-  /// `--dart-define=API_BASE_URL=http://10.0.2.2:8000/api` (Android emulator)
+  /// Override when needed:
+  /// `--dart-define=API_BASE_URL=http://10.0.2.2:8000/api`
   /// `--dart-define=API_ORIGIN=http://10.0.2.2:8000`
+  ///
+  /// Default: production membership API (deployed MySQL / same data as the website).
   static const String _apiBaseFromEnv = String.fromEnvironment('API_BASE_URL');
   static const String _originFromEnv = String.fromEnvironment('API_ORIGIN');
 
+  static const String productionOrigin = 'https://loyalty.29jewellery.com';
+  static const String productionApiBase = '$productionOrigin/api';
+
   static String get apiBaseUrl {
     if (_apiBaseFromEnv.isNotEmpty) return _apiBaseFromEnv;
-    // Windows / macOS / iOS simulator / Chrome → host machine
-    // Android emulator needs 10.0.2.2 via dart-define
-    return 'http://127.0.0.1:8000/api';
+    return productionApiBase;
   }
 
   static String get mediaOrigin {
     if (_originFromEnv.isNotEmpty) return _originFromEnv;
-    return 'http://127.0.0.1:8000';
+    return productionOrigin;
   }
+
+  static bool get isProductionApi =>
+      apiBaseUrl.contains('loyalty.29jewellery.com');
 
   static bool get isWeb => kIsWeb;
 

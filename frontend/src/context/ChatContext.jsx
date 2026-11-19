@@ -30,6 +30,7 @@ export function ChatProvider({ children }) {
   const applyTypingStateRef = useRef(null)
   const applyReceiptRef = useRef(null)
   const applyMessageUpdateRef = useRef(null)
+  const applyMessageDeleteRef = useRef(null)
   const seenMessageIdsRef = useRef(new Set())
   const isStaff = user?.role === 'admin' || user?.role === 'staff'
 
@@ -188,8 +189,7 @@ export function ChatProvider({ children }) {
 
     if (user.role === 'customer') {
       setView('thread')
-      // Incoming staff call already knows the conversation — open it directly
-      // instead of racing a fresh /open request that can miss the ring UI.
+      // Open a specific conversation when provided (deep link / notification).
       if (conversationId) {
         setActiveId(conversationId)
         setConversations((prev) => {
@@ -339,6 +339,27 @@ export function ChatProvider({ children }) {
     }
   }, [])
 
+  const deleteMessage = useCallback(async (messageId) => {
+    const conversationId = activeIdRef.current
+    if (!conversationId || !messageId) return false
+    setError('')
+    try {
+      await api.delete(`/chat/conversations/${conversationId}/messages/${messageId}`)
+      setMessages((prev) => prev.filter((row) => Number(row.id) !== Number(messageId)))
+      setConversations((prev) =>
+        prev.map((row) => {
+          if (Number(row.id) !== Number(conversationId)) return row
+          if (Number(row.latest_message?.id) !== Number(messageId)) return row
+          return { ...row, latest_message: null }
+        }),
+      )
+      return true
+    } catch (err) {
+      setError(err?.message || 'Could not delete message.')
+      throw err
+    }
+  }, [])
+
   const applyMessageUpdate = useCallback((payload) => {
     const message = payload?.message
     if (!message?.id) return
@@ -348,6 +369,21 @@ export function ChatProvider({ children }) {
         if (Number(row.id) !== Number(message.conversation_id)) return row
         if (Number(row.latest_message?.id) !== Number(message.id)) return row
         return { ...row, latest_message: { ...row.latest_message, ...message } }
+      }),
+    )
+  }, [])
+
+  const applyMessageDelete = useCallback((payload) => {
+    const messageId = Number(payload?.message_id || 0)
+    const conversationId = Number(payload?.conversation_id || 0)
+    if (!messageId) return
+    setMessages((prev) => prev.filter((row) => Number(row.id) !== messageId))
+    if (!conversationId) return
+    setConversations((prev) =>
+      prev.map((row) => {
+        if (Number(row.id) !== conversationId) return row
+        if (Number(row.latest_message?.id) !== messageId) return row
+        return { ...row, latest_message: null }
       }),
     )
   }, [])
@@ -550,8 +586,11 @@ export function ChatProvider({ children }) {
     applyMessageUpdateRef.current = applyMessageUpdate
   }, [applyMessageUpdate])
 
-  // Keep a single Echo connection for the logged-in user. Do not tear it down when
-  // message handlers change — that was killing call invite subscriptions.
+  useEffect(() => {
+    applyMessageDeleteRef.current = applyMessageDelete
+  }, [applyMessageDelete])
+
+  // Keep a single Echo connection for the logged-in user.
   useEffect(() => {
     if (!user?.id) {
       disconnectEcho()
@@ -574,16 +613,19 @@ export function ChatProvider({ children }) {
       const onMessage = (payload) => handleIncomingMessageRef.current?.(payload)
       const onReceipt = (payload) => applyReceiptRef.current?.(payload)
       const onUpdated = (payload) => applyMessageUpdateRef.current?.(payload)
+      const onDeleted = (payload) => applyMessageDeleteRef.current?.(payload)
       if (isStaff) {
         const channel = echo.private('chat.staff')
         channel.listen('.chat.message', onMessage)
         channel.listen('.chat.receipt', onReceipt)
         channel.listen('.chat.message.updated', onUpdated)
+        channel.listen('.chat.message.deleted', onDeleted)
         cleanups.push(() => {
           try {
             channel.stopListening('.chat.message', onMessage)
             channel.stopListening('.chat.receipt', onReceipt)
             channel.stopListening('.chat.message.updated', onUpdated)
+            channel.stopListening('.chat.message.deleted', onDeleted)
           } catch {
             // ignore
           }
@@ -593,11 +635,13 @@ export function ChatProvider({ children }) {
         channel.listen('.chat.message', onMessage)
         channel.listen('.chat.receipt', onReceipt)
         channel.listen('.chat.message.updated', onUpdated)
+        channel.listen('.chat.message.deleted', onDeleted)
         cleanups.push(() => {
           try {
             channel.stopListening('.chat.message', onMessage)
             channel.stopListening('.chat.receipt', onReceipt)
             channel.stopListening('.chat.message.updated', onUpdated)
+            channel.stopListening('.chat.message.deleted', onDeleted)
           } catch {
             // ignore
           }
@@ -631,10 +675,12 @@ export function ChatProvider({ children }) {
     const onTyping = (payload) => applyTypingStateRef.current?.(payload)
     const onReceipt = (payload) => applyReceiptRef.current?.(payload)
     const onUpdated = (payload) => applyMessageUpdateRef.current?.(payload)
+    const onDeleted = (payload) => applyMessageDeleteRef.current?.(payload)
     channel.listen('.chat.message', onMessage)
     channel.listen('.chat.typing', onTyping)
     channel.listen('.chat.receipt', onReceipt)
     channel.listen('.chat.message.updated', onUpdated)
+    channel.listen('.chat.message.deleted', onDeleted)
     channel.listenForWhisper('typing', onTyping)
 
     return () => {
@@ -643,6 +689,7 @@ export function ChatProvider({ children }) {
         channel.stopListening('.chat.typing', onTyping)
         channel.stopListening('.chat.receipt', onReceipt)
         channel.stopListening('.chat.message.updated', onUpdated)
+        channel.stopListening('.chat.message.deleted', onDeleted)
         channel.stopListeningForWhisper('typing')
       } catch {
         // ignore
@@ -693,6 +740,7 @@ export function ChatProvider({ children }) {
       loadConversations,
       sendMessage,
       editMessage,
+      deleteMessage,
       refreshChatUnread,
     }),
     [
@@ -719,6 +767,7 @@ export function ChatProvider({ children }) {
       loadConversations,
       sendMessage,
       editMessage,
+      deleteMessage,
       refreshChatUnread,
     ],
   )

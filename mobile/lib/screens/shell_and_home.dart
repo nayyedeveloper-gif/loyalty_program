@@ -19,26 +19,71 @@ class AppShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.watch<LanguageProvider>().t;
-    final unread = context.watch<NotificationProvider>().unread;
+    final unread = context.watch<NotificationProvider>().totalUnread;
+    final palette = AppPalette.of(context);
     return Scaffold(
       body: AppBackground(child: navigationShell),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: navigationShell.currentIndex,
-        onDestinationSelected: (i) {
-          navigationShell.goBranch(i, initialLocation: i == navigationShell.currentIndex);
-          context.read<NotificationProvider>().refreshUnread();
-        },
-        destinations: [
-          NavigationDestination(icon: const Icon(Icons.workspace_premium_outlined), selectedIcon: const Icon(Icons.workspace_premium), label: t('membership')),
-          NavigationDestination(icon: const Icon(Icons.casino_outlined), selectedIcon: const Icon(Icons.casino), label: t('spinwheel')),
-          NavigationDestination(icon: const Icon(Icons.receipt_long_outlined), selectedIcon: const Icon(Icons.receipt_long), label: t('purchaseHistory')),
-          NavigationDestination(icon: const Icon(Icons.card_giftcard_outlined), selectedIcon: const Icon(Icons.card_giftcard), label: t('rewards')),
-          NavigationDestination(
-            icon: Badge(isLabelVisible: unread > 0, label: Text('$unread'), child: const Icon(Icons.grid_view_rounded)),
-            selectedIcon: const Icon(Icons.grid_view_rounded),
-            label: t('more'),
-          ),
-        ],
+      floatingActionButton: FloatingActionButton(
+        heroTag: 'support-chat-fab',
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        onPressed: () => context.push('/app/inbox'),
+        child: Badge(
+          isLabelVisible: unread > 0,
+          label: Text('$unread'),
+          child: const Icon(Icons.chat_bubble_outline),
+        ),
+      ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: palette.navBar,
+          border: Border(top: BorderSide(color: palette.line.withValues(alpha: 0.9))),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: palette.isDark ? 0.35 : 0.05),
+              blurRadius: 16,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: NavigationBar(
+          selectedIndex: navigationShell.currentIndex,
+          onDestinationSelected: (i) {
+            navigationShell.goBranch(i, initialLocation: i == navigationShell.currentIndex);
+            context.read<NotificationProvider>().refreshUnread();
+          },
+          destinations: [
+            NavigationDestination(
+              icon: const Icon(Icons.workspace_premium_outlined),
+              selectedIcon: const Icon(Icons.workspace_premium),
+              label: t('membership'),
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.casino_outlined),
+              selectedIcon: const Icon(Icons.casino),
+              label: t('spinwheel'),
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.receipt_long_outlined),
+              selectedIcon: const Icon(Icons.receipt_long),
+              label: t('purchase'),
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.card_giftcard_outlined),
+              selectedIcon: const Icon(Icons.card_giftcard),
+              label: t('rewards'),
+            ),
+            NavigationDestination(
+              icon: Badge(
+                isLabelVisible: unread > 0,
+                label: Text('$unread'),
+                child: const Icon(Icons.grid_view_rounded),
+              ),
+              selectedIcon: const Icon(Icons.grid_view_rounded),
+              label: t('more'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -86,169 +131,169 @@ class _MembershipScreenState extends State<MembershipScreen> {
     return dt.difference(DateTime.now()).inDays.clamp(0, 99999);
   }
 
+  String _greeting(LanguageProvider lang) {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return lang.t('goodMorning');
+    if (hour < 17) return lang.t('goodAfternoon');
+    return lang.t('goodEvening');
+  }
+
+  double _tierProgress(Membership m) {
+    final next = m.nextTier;
+    if (next == null) return 1;
+    if (next['progress'] is num) {
+      return ((next['progress'] as num) / 100).clamp(0, 1).toDouble();
+    }
+    final rawMin = next['min_spend_mmk'] ?? next['min'] ?? 0;
+    final min = rawMin is num ? rawMin.toDouble() : double.tryParse('$rawMin') ?? 0;
+    if (min <= 0) return 0;
+    return (m.totalSpent.toDouble() / min).clamp(0.0, 1.0);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final t = context.watch<LanguageProvider>().t;
-    final lang = context.watch<LanguageProvider>().lang;
+    final lang = context.watch<LanguageProvider>();
+    final t = lang.t;
+    final locale = lang.lang;
     if (loading) {
-      return Scaffold(appBar: AppBar(title: Text(t('myMembership'))), body: LoadingView(label: t('loading')));
+      return Scaffold(body: LoadingView(label: t('loading')));
     }
     if (error != null || membership == null) {
       return Scaffold(
-        appBar: AppBar(title: Text(t('myMembership'))),
-        body: Padding(padding: const EdgeInsets.all(16), child: ErrorBanner(message: error ?? t('somethingWrong'), onRetry: _load)),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: ErrorBanner(message: error ?? t('somethingWrong'), onRetry: _load),
+          ),
+        ),
       );
     }
 
     final m = membership!;
     final days = _daysUntil(m.pointsExpireAt);
     final next = m.nextTier;
-    final progress = next == null
-        ? 0.0
-        : ((next['progress'] is num)
-            ? (next['progress'] as num).toDouble()
-            : double.tryParse('${next['progress']}') ?? 0);
-    final expiryLabel = formatDate(m.pointsExpireAt, locale: lang);
-    final divisor = m.settings?['base_earn_divisor'] ?? 10000;
+    final progress = _tierProgress(m);
+    final expiryLabel = formatDate(m.pointsExpireAt, locale: locale);
+    final unread = context.watch<NotificationProvider>().totalUnread;
+    final nextName = next == null ? '' : '${next['name'] ?? next['tier'] ?? ''}';
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(t('myMembership')),
-        actions: [
-          IconButton(
-            tooltip: t('notifications'),
-            onPressed: () => context.push('/app/notifications'),
-            icon: Badge(
-              isLabelVisible: context.watch<NotificationProvider>().unread > 0,
-              child: const Icon(Icons.notifications_outlined),
-            ),
-          ),
-        ],
-      ),
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
           children: [
-            SectionHeader(title: t('myMembership'), subtitle: t('membershipSubtitle')),
-            Card(
-              clipBehavior: Clip.antiAlias,
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      AppColors.primary.withValues(alpha: 0.08),
-                      Colors.white,
-                    ],
+            SafeArea(
+              bottom: false,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_greeting(lang), style: Theme.of(context).textTheme.bodySmall),
+                        Text(m.name, style: Theme.of(context).textTheme.headlineSmall),
+                      ],
+                    ),
                   ),
-                ),
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.line),
-                      ),
-                      child: QrImageView(
-                        data: '29G:${m.customerCode}',
-                        size: 112,
-                        backgroundColor: Colors.white,
+                  Material(
+                    color: AppPalette.of(context).surface,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: AppPalette.of(context).line),
+                    ),
+                    child: IconButton(
+                      tooltip: t('notifications'),
+                      onPressed: () => context.push('/app/notifications'),
+                      icon: Badge(
+                        isLabelVisible: unread > 0,
+                        label: Text('$unread'),
+                        child: const Icon(Icons.notifications_outlined),
                       ),
                     ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(t('membershipCard'), style: Theme.of(context).textTheme.titleMedium),
-                          const SizedBox(height: 4),
-                          Text(m.customerCode, style: Theme.of(context).textTheme.headlineSmall?.copyWith(letterSpacing: 1)),
-                          Text(m.name, style: Theme.of(context).textTheme.bodyMedium),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 6,
-                            children: [
-                              TierPill(tier: t(m.tier)),
-                              Text('${formatPoints(m.redeemablePoints)} ${t('points')}',
-                                  style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primaryDark)),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(t('membershipCardHint'), style: Theme.of(context).textTheme.bodySmall),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-            if (days != null && days <= 45 && m.redeemablePoints > 0) ...[
-              const SizedBox(height: 12),
-              days <= 7
-                  ? ErrorBanner(message: t('pointsExpiry', {'days': days, 'date': expiryLabel}))
-                  : SuccessBanner(message: t('pointsExpiry', {'days': days, 'date': expiryLabel})),
-            ],
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: StatCard(
-                    label: t('customerId'),
-                    value: m.customerCode,
-                    hint: '${t('referralCode')}: ${m.referralCode ?? '—'}',
+            const SizedBox(height: 14),
+            Container(
+              decoration: BoxDecoration(
+                gradient: AppColors.gradientMembership,
+                borderRadius: BorderRadius.circular(22),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.28),
+                    blurRadius: 24,
+                    offset: const Offset(0, 10),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: StatCard(
-                    label: t('currentTier'),
-                    value: t(m.tier),
-                    hint: t('earnMultiplierLabel', {'multiplier': m.earnMultiplier}),
-                    child: m.currentPerks.isEmpty
-                        ? null
-                        : Text(m.currentPerks.take(2).join(' · '), style: Theme.of(context).textTheme.bodySmall),
+                ],
+              ),
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '${t(m.tier)}  ·  ${m.earnMultiplier}x',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 11),
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '${t('loginStreak')} ${m.loginStreak}',
+                        style: TextStyle(color: Colors.white.withValues(alpha: 0.92), fontWeight: FontWeight.w600, fontSize: 12),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: StatCard(
-                    icon: Icons.diamond_outlined,
-                    label: t('redeemablePoints'),
-                    value: formatPoints(m.redeemablePoints),
-                    hint: t('pointsExpireHint', {'date': expiryLabel}),
+                  const SizedBox(height: 14),
+                  Text(t('redeemablePoints'), style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 12)),
+                  Text(
+                    formatPoints(m.redeemablePoints),
+                    style: const TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.w800, height: 1.05),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: StatCard(
-                    icon: Icons.emoji_events_outlined,
-                    label: t('tierPoints365'),
-                    value: formatPoints(m.tierPoints365d),
-                    hint: t('tierPointsHint'),
+                  if (days != null)
+                    Text(
+                      t('pointsExpiry', {'days': days, 'date': expiryLabel}),
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 11),
+                    ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                        child: QrImageView(
+                          data: '29G:${m.customerCode}',
+                          size: 88,
+                          backgroundColor: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(t('customerId'), style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 11)),
+                            Text(
+                              m.customerCode,
+                              style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: 0.6),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(t('membershipCardHint'), style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(child: StatCard(label: t('totalSpent'), value: formatMMK(m.totalSpent))),
-                const SizedBox(width: 10),
-                Expanded(child: StatCard(label: t('loginStreak'), value: '${m.loginStreak}')),
-              ],
-            ),
-            const SizedBox(height: 10),
-            StatCard(
-              label: t('earnRule'),
-              value: t('earnRuleCopy', {'divisor': divisor}),
+                ],
+              ),
             ),
             const SizedBox(height: 12),
             Card(
@@ -267,42 +312,81 @@ class _MembershipScreenState extends State<MembershipScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            t('progressTo', {'tier': t('${next['name'] ?? next['tier'] ?? ''}'.toLowerCase())}),
+                            t('progressTo', {'tier': t(nextName.toLowerCase())}),
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                           const SizedBox(height: 6),
                           Text(
                             t('earnMoreTierPoints', {
-                              'points': formatPoints(next['remaining'] ?? 0),
-                              'tier': '${next['name'] ?? next['tier'] ?? ''}',
+                              'points': formatMMK(next['remaining'] ?? 0),
+                              'tier': nextName,
                             }),
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
-                          if ((next['estimated_spend_mmk'] is num) && (next['estimated_spend_mmk'] as num) > 0) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              t('tierSpendCoach', {
-                                'amount': formatMMK(next['estimated_spend_mmk']),
-                                'tier': '${next['name'] ?? ''}',
-                                'multiplier': next['at_multiplier'] ?? m.earnMultiplier,
-                              }),
-                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                            ),
-                          ],
                           const SizedBox(height: 12),
                           ClipRRect(
                             borderRadius: BorderRadius.circular(99),
                             child: LinearProgressIndicator(
-                              value: (progress / 100).clamp(0, 1),
-                              minHeight: 10,
-                              backgroundColor: AppColors.primarySoft,
+                              value: progress,
+                              minHeight: 8,
+                              backgroundColor: AppPalette.of(context).surface2,
                               color: AppColors.primary,
                             ),
                           ),
                           const SizedBox(height: 6),
-                          Text(t('progressPercent', {'percent': progress.round()}), style: Theme.of(context).textTheme.bodySmall),
+                          Text(
+                            t('progressPercent', {'percent': (progress * 100).round()}),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
                         ],
                       ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(child: _QuickTile(icon: Icons.casino_outlined, label: t('spinwheel'), onTap: () => context.go('/app/spinwheel'))),
+                const SizedBox(width: 10),
+                Expanded(child: _QuickTile(icon: Icons.card_giftcard_outlined, label: t('rewards'), onTap: () => context.go('/app/rewards'))),
+                const SizedBox(width: 10),
+                Expanded(child: _QuickTile(icon: Icons.group_add_outlined, label: t('invite'), onTap: () => context.push('/app/community'))),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SectionHeader(title: t('quickActions')),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _ActionLinkChip(icon: Icons.timeline, label: t('pointsActivity'), onPressed: () => context.push('/app/points')),
+                _ActionLinkChip(icon: Icons.flag_outlined, label: t('missions'), onPressed: () => context.push('/app/missions')),
+                _ActionLinkChip(icon: Icons.chat_bubble_outline, label: t('supportChat'), onPressed: () => context.push('/app/inbox')),
+                _ActionLinkChip(icon: Icons.receipt_long_outlined, label: t('purchase'), onPressed: () => context.go('/app/history')),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SectionHeader(title: t('tierBenefits')),
+            Card(
+              child: Column(
+                children: (m.tiers?.entries.toList() ?? []).map((e) {
+                  final cfg = e.value;
+                  final perks = cfg is Map && cfg['perks'] is List ? (cfg['perks'] as List).join(' · ') : '';
+                  final min = cfg is Map ? cfg['min_spend_mmk'] ?? cfg['min'] : 0;
+                  final mult = cfg is Map ? cfg['multiplier'] : 1;
+                  return ListTile(
+                    title: Row(
+                      children: [
+                        TierPill(tier: t(e.key.toLowerCase())),
+                        const Spacer(),
+                        Text(
+                          t('tierPerkLine', {'points': formatMMK(min is num ? min : 0), 'multiplier': mult}),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                    subtitle: perks.isEmpty ? null : Text(perks),
+                  );
+                }).toList(),
               ),
             ),
             const SizedBox(height: 12),
@@ -321,44 +405,60 @@ class _MembershipScreenState extends State<MembershipScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-            SectionHeader(title: t('quickActions')),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                ActionChip(avatar: const Icon(Icons.card_giftcard, size: 16), label: Text(t('rewardsCatalog')), onPressed: () => context.go('/app/rewards')),
-                ActionChip(avatar: const Icon(Icons.flag, size: 16), label: Text(t('missions')), onPressed: () => context.push('/app/missions')),
-                ActionChip(avatar: const Icon(Icons.timeline, size: 16), label: Text(t('pointsActivity')), onPressed: () => context.push('/app/points')),
-                ActionChip(avatar: const Icon(Icons.casino, size: 16), label: Text(t('spinwheel')), onPressed: () => context.go('/app/spinwheel')),
-              ],
-            ),
-            const SizedBox(height: 16),
-            SectionHeader(title: t('tierBenefits')),
-            Card(
-              child: Column(
-                children: (m.tiers?.entries.toList() ?? []).map((e) {
-                  final cfg = e.value;
-                  final perks = cfg is Map && cfg['perks'] is List ? (cfg['perks'] as List).join(' · ') : '';
-                  final min = cfg is Map ? cfg['min'] : 0;
-                  final mult = cfg is Map ? cfg['multiplier'] : 1;
-                  return ListTile(
-                    title: Row(
-                      children: [
-                        TierPill(tier: t(e.key.toLowerCase())),
-                        const Spacer(),
-                        Text(
-                          t('tierPerkLine', {'points': formatPoints(min is num ? min : 0), 'multiplier': mult}),
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                    subtitle: perks.isEmpty ? null : Text(perks),
-                  );
-                }).toList(),
-              ),
-            ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionLinkChip extends StatelessWidget {
+  const _ActionLinkChip({required this.icon, required this.label, required this.onPressed});
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    return ActionChip(
+      avatar: Icon(icon, size: 16, color: AppColors.primary),
+      label: Text(label, style: TextStyle(color: palette.inkSoft, fontWeight: FontWeight.w700)),
+      backgroundColor: palette.surface,
+      side: BorderSide(color: palette.line),
+      onPressed: onPressed,
+    );
+  }
+}
+
+class _QuickTile extends StatelessWidget {
+  const _QuickTile({required this.icon, required this.label, required this.onTap});
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    return Material(
+      color: palette.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: palette.line),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: SizedBox(
+          height: 78,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: AppColors.primary),
+              const SizedBox(height: 6),
+              Text(label, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: palette.ink)),
+            ],
+          ),
         ),
       ),
     );
@@ -401,8 +501,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Widget build(BuildContext context) {
     final t = context.watch<LanguageProvider>().t;
     final lang = context.watch<LanguageProvider>().lang;
+    final palette = AppPalette.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(t('purchaseHistory'))),
+      appBar: AppBar(title: Text(t('purchase'))),
       body: loading
           ? LoadingView(label: t('loading'))
           : error != null
@@ -424,20 +525,26 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                 width: 42,
                                 height: 42,
                                 decoration: BoxDecoration(
-                                  color: AppColors.primarySoft,
+                                  color: palette.primarySoft,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: const Icon(Icons.shopping_bag_outlined, color: AppColors.primaryDark),
+                                child: Icon(Icons.shopping_bag_outlined, color: palette.onSoft),
                               ),
-                              title: Text(p.productName ?? p.productCode ?? '#${p.id}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                              subtitle: Text('${formatDate(p.soldAt, locale: lang)}\n${formatMMK(p.netAmount ?? p.amount)}'),
+                              title: Text(
+                                p.productName ?? p.productCode ?? '#${p.id}',
+                                style: TextStyle(fontWeight: FontWeight.w700, color: palette.ink),
+                              ),
+                              subtitle: Text(
+                                '${formatDate(p.soldAt, locale: lang)}\n${formatMMK(p.netAmount ?? p.amount)}',
+                                style: TextStyle(color: palette.inkSoft, height: 1.35),
+                              ),
                               isThreeLine: true,
                               trailing: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
                                   Text('+${formatPoints(p.pointsEarned)}', style: const TextStyle(color: AppColors.ok, fontWeight: FontWeight.w700)),
-                                  Text(p.status ?? '', style: Theme.of(context).textTheme.bodySmall),
+                                  Text(p.status ?? '', style: TextStyle(color: palette.inkSoft, fontSize: 12)),
                                 ],
                               ),
                               onTap: () => context.push('/app/history/${p.id}'),
@@ -531,7 +638,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(
           children: [
-            Expanded(child: Text(k, style: const TextStyle(color: AppColors.muted))),
+            Expanded(child: Text(k, style: const TextStyle(color: AppColors.inkSoft, fontWeight: FontWeight.w600))),
             Text(v, style: const TextStyle(fontWeight: FontWeight.w600)),
           ],
         ),
@@ -654,7 +761,7 @@ class MoreScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.watch<LanguageProvider>().t;
-    final unread = context.watch<NotificationProvider>().unread;
+    final notif = context.watch<NotificationProvider>();
     final user = context.watch<AuthProvider>().user;
     return Scaffold(
       appBar: AppBar(title: Text(t('more'))),
@@ -663,14 +770,22 @@ class MoreScreen extends StatelessWidget {
         children: [
           Card(
             child: ListTile(
+              contentPadding: const EdgeInsets.all(14),
               leading: CircleAvatar(
-                backgroundColor: AppColors.primarySoft,
-                child: Text((user?.name.isNotEmpty == true ? user!.name[0] : 'M').toUpperCase(),
-                    style: const TextStyle(color: AppColors.primaryDark, fontWeight: FontWeight.w800)),
+                radius: 26,
+                backgroundColor: AppPalette.of(context).primarySoft,
+                child: Text(
+                  (user?.name.isNotEmpty == true ? user!.name[0] : 'M').toUpperCase(),
+                  style: TextStyle(color: AppPalette.of(context).onSoft, fontWeight: FontWeight.w800, fontSize: 18),
+                ),
               ),
-              title: Text(user?.name ?? '', style: const TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: Text(user?.email ?? ''),
-              trailing: TierPill(tier: t(user?.tier ?? 'care')),
+              title: Text(user?.name ?? '', style: TextStyle(fontWeight: FontWeight.w700, color: AppPalette.of(context).ink)),
+              subtitle: Text(
+                '${t(user?.tier ?? 'care')}  ·  ${user?.customerCode ?? ''}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              trailing: Icon(Icons.chevron_right, color: AppPalette.of(context).muted),
+              onTap: () => context.push('/app/settings/profile'),
             ),
           ),
           const SizedBox(height: 14),
@@ -679,9 +794,20 @@ class MoreScreen extends StatelessWidget {
           SettingsTile(icon: Icons.groups_outlined, title: t('communityHub'), subtitle: t('shareReferral'), onTap: () => context.push('/app/community')),
           SettingsTile(icon: Icons.rate_review_outlined, title: t('reviews'), onTap: () => context.push('/app/reviews')),
           SettingsTile(
+            icon: Icons.chat_bubble_outline,
+            title: t('supportChat'),
+            subtitle: t('supportChatHint'),
+            trailing: notif.chatUnread > 0
+                ? Badge(label: Text('${notif.chatUnread}'))
+                : Icon(Icons.chevron_right, color: AppPalette.of(context).muted),
+            onTap: () => context.push('/app/inbox'),
+          ),
+          SettingsTile(
             icon: Icons.notifications_outlined,
             title: t('notifications'),
-            trailing: unread > 0 ? Badge(label: Text('$unread')) : const Icon(Icons.chevron_right, color: AppColors.muted),
+            trailing: notif.unread > 0
+                ? Badge(label: Text('${notif.unread}'))
+                : Icon(Icons.chevron_right, color: AppPalette.of(context).muted),
             onTap: () => context.push('/app/notifications'),
           ),
           SettingsTile(icon: Icons.settings_outlined, title: t('settings'), onTap: () => context.push('/app/settings')),
@@ -691,7 +817,13 @@ class MoreScreen extends StatelessWidget {
             title: t('signOut'),
             danger: true,
             onTap: () async {
-              final ok = await showConfirmDialog(context, title: t('signOut'), message: t('logoutConfirm'), confirmLabel: t('signOut'), cancelLabel: t('cancel'));
+              final ok = await showConfirmDialog(
+                context,
+                title: t('signOut'),
+                message: t('logoutConfirm'),
+                confirmLabel: t('signOut'),
+                cancelLabel: t('cancel'),
+              );
               if (!ok || !context.mounted) return;
               await context.read<AuthProvider>().logout();
               if (context.mounted) context.go('/landing');

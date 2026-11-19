@@ -74,7 +74,7 @@ body,
   --text-small: 0.8125rem; /* ~13px buttons, secondary */
   --text-body: 0.875rem; /* ~14px body / table cells */
   --text-section: 1rem; /* ~16px section headings */
-  --text-title: clamp(1.25rem, 2.4vw, 1.5rem); /* ~20â€“24px page titles */
+  --text-title: clamp(1.25rem, 2.4vw, 1.5rem); /* ~20Ã¢Â€Â“24px page titles */
   --text-display: clamp(1.5rem, 4vw, 2rem);
   --text-stat: 1.25rem; /* ~20px card values */
   --text-brand-sub: 0.625rem;
@@ -4148,7 +4148,7 @@ html[data-theme="dark"] .settings-divider-block {
   border-top-color: var(--color-line);
 }
 
-/* —— Live chat messenger —— */
+/* -- Live chat messenger -- */
 .chat-widget-root {
   position: fixed;
   top: auto;
@@ -4636,10 +4636,6 @@ html[data-theme="dark"] .settings-divider-block {
   overflow: hidden;
 }
 
-.chat-thread-room .chat-call-overlay {
-  position: absolute;
-}
-
 .chat-thread-room .chat-expr-picker {
   flex-shrink: 0;
   border-top: 1px solid var(--color-line, #e2e8f0);
@@ -4712,21 +4708,6 @@ html[data-theme="dark"] .settings-divider-block {
   align-items: center;
   gap: 0.35rem;
   flex-shrink: 0;
-}
-
-.chat-call-head-btn {
-  background: rgba(255, 255, 255, 0.18);
-}
-
-.chat-call-head-btn:hover,
-.chat-call-head-btn:focus-visible {
-  background: rgba(251, 146, 60, 0.95);
-  color: #fff;
-}
-
-.chat-call-head-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 
 .chat-panel-title {
@@ -6127,95 +6108,6 @@ html[data-theme="dark"] .chat-composer input {
 html[data-theme="dark"] .chat-bubble.is-mine {
   background: #2563eb;
   color: #fff;
-}
-
-.chat-call-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 20;
-  display: flex;
-  flex-direction: column;
-  background: #0b1220;
-  color: #fff;
-}
-
-.chat-call-audio-panel {
-  flex: 1;
-  display: grid;
-  place-content: center;
-  gap: 0.55rem;
-  text-align: center;
-  padding: 1.5rem;
-}
-
-.chat-call-avatar {
-  width: 4.5rem;
-  height: 4.5rem;
-  margin: 0 auto;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-  font-size: 1.6rem;
-  font-weight: 700;
-  background: linear-gradient(135deg, #fb923c, #ea580c);
-  color: #fff;
-}
-
-.chat-call-avatar.is-lg {
-  width: 5.5rem;
-  height: 5.5rem;
-  font-size: 2rem;
-}
-
-.chat-call-peer {
-  font-size: 1.15rem;
-  font-weight: 700;
-}
-
-.chat-call-status {
-  font-size: 0.88rem;
-  opacity: 0.8;
-}
-
-.chat-call-error {
-  margin: 0 0.9rem 0.5rem;
-  padding: 0.45rem 0.65rem;
-  border-radius: 0.55rem;
-  background: rgba(239, 68, 68, 0.18);
-  color: #fecaca;
-  font-size: 0.8rem;
-  text-align: center;
-}
-
-.chat-call-actions {
-  display: flex;
-  justify-content: center;
-  gap: 0.85rem;
-  padding: 1rem 1rem 1.25rem;
-}
-
-.chat-call-btn {
-  width: 3.1rem;
-  height: 3.1rem;
-  border: 0;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-}
-
-.chat-call-btn.is-accept {
-  background: #16a34a;
-}
-
-.chat-call-btn.is-reject {
-  background: #dc2626;
-}
-
-.chat-call-btn.is-off {
-  background: rgba(248, 113, 113, 0.28);
 }
 
 @media (max-width: 640px) {

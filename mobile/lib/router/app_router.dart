@@ -1,6 +1,9 @@
 import 'package:go_router/go_router.dart';
 import 'package:loyalty_mobile/providers/auth_provider.dart';
+import 'package:loyalty_mobile/screens/admin_screens.dart';
+import 'package:loyalty_mobile/screens/admin_spinwheel_screens.dart';
 import 'package:loyalty_mobile/screens/auth_screens.dart';
+import 'package:loyalty_mobile/screens/chat_screens.dart';
 import 'package:loyalty_mobile/screens/feature_screens.dart';
 import 'package:loyalty_mobile/screens/shell_and_home.dart';
 import 'package:loyalty_mobile/screens/spinwheel_screens.dart';
@@ -18,19 +21,29 @@ GoRouter createRouter(AuthProvider auth) {
           loc == '/forgot-password' ||
           loc.startsWith('/guest/');
       final isSplash = loc == '/';
+      final isAppRoute = loc.startsWith('/app');
+      final isAdminRoute = loc.startsWith('/admin');
 
       if (loggingIn) return isSplash ? null : '/';
 
       if (!auth.isLoggedIn) {
-        if (loc.startsWith('/app')) return '/signin';
+        if (isAppRoute || isAdminRoute) return '/signin';
         return null;
       }
 
-      if (!auth.isCustomer) {
-        return isAuthRoute || isSplash ? null : '/landing';
+      if (auth.isPortalUser) {
+        if (isAuthRoute || isSplash || isAppRoute) return '/admin';
+        // Spinwheel admin APIs are admin-only (not staff).
+        if (loc.startsWith('/admin/spinwheel') && !auth.isAdmin) return '/admin';
+        return null;
       }
 
-      if (isAuthRoute || isSplash) return '/app';
+      if (auth.isCustomer) {
+        if (isAuthRoute || isSplash || isAdminRoute) return '/app';
+        return null;
+      }
+
+      if (isAppRoute || isAdminRoute) return '/landing';
       return null;
     },
     routes: [
@@ -82,6 +95,7 @@ GoRouter createRouter(AuthProvider auth) {
         ),
       ),
       GoRoute(path: '/app/notifications', builder: (_, __) => const NotificationsScreen()),
+      GoRoute(path: '/app/inbox', builder: (_, __) => const ChatInboxScreen()),
       GoRoute(path: '/app/settings', builder: (_, __) => const SettingsScreen()),
       GoRoute(path: '/app/settings/profile', builder: (_, __) => const ProfileScreen()),
       GoRoute(path: '/app/settings/password', builder: (_, __) => const PasswordScreen()),
@@ -89,6 +103,59 @@ GoRouter createRouter(AuthProvider auth) {
       GoRoute(path: '/app/settings/about', builder: (_, __) => const AboutScreen()),
       GoRoute(path: '/app/help', builder: (_, __) => const HelpScreen()),
       GoRoute(path: '/app/help/:id', builder: (_, state) => HelpDetailScreen(id: state.pathParameters['id']!)),
+
+      // Shop portal (admin + staff)
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) =>
+            AdminShell(navigationShell: navigationShell),
+        branches: [
+          StatefulShellBranch(routes: [
+            GoRoute(path: '/admin', builder: (_, __) => const AdminHomeScreen()),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(path: '/admin/inbox', builder: (_, __) => const AdminInboxScreen()),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(path: '/admin/customers', builder: (_, __) => const AdminCustomersScreen()),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(path: '/admin/purchases', builder: (_, __) => const AdminPurchasesScreen()),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(path: '/admin/more', builder: (_, __) => const AdminMoreScreen()),
+          ]),
+        ],
+      ),
+      GoRoute(
+        path: '/admin/inbox/:id',
+        builder: (_, state) => ChatInboxScreen(
+          conversationId: int.tryParse(state.pathParameters['id'] ?? ''),
+        ),
+      ),
+      GoRoute(path: '/admin/customers/new', builder: (_, __) => const AdminCustomerFormScreen()),
+      GoRoute(
+        path: '/admin/customers/:id',
+        builder: (_, state) => AdminCustomerDetailScreen(id: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/admin/customers/:id/edit',
+        builder: (_, state) => AdminCustomerFormScreen(id: state.pathParameters['id']),
+      ),
+      GoRoute(
+        path: '/admin/purchases/new',
+        builder: (_, state) => AdminPurchaseFormScreen(
+          userId: state.uri.queryParameters['user_id'],
+          memberCode: state.uri.queryParameters['code'],
+        ),
+      ),
+      GoRoute(path: '/admin/redemptions', builder: (_, __) => const AdminRedemptionsScreen()),
+      GoRoute(path: '/admin/ledger', builder: (_, __) => const AdminLedgerScreen()),
+      GoRoute(path: '/admin/notifications', builder: (_, __) => const NotificationsScreen()),
+      GoRoute(path: '/admin/spinwheel', builder: (_, __) => const AdminSpinHubScreen()),
+      GoRoute(path: '/admin/spinwheel/wheels', builder: (_, __) => const AdminSpinWheelsScreen()),
+      GoRoute(path: '/admin/spinwheel/usage', builder: (_, __) => const AdminSpinUsageScreen()),
+      GoRoute(path: '/admin/spinwheel/rewards', builder: (_, __) => const AdminSpinRewardsScreen()),
+      GoRoute(path: '/admin/spinwheel/guests', builder: (_, __) => const AdminGuestSpinsScreen()),
     ],
   );
 }

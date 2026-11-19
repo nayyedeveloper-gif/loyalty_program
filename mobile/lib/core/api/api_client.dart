@@ -71,6 +71,117 @@ class ApiClient {
   Future<Map<String, dynamic>> delete(String path) =>
       _send('DELETE', path);
 
+  /// Unwraps JSON array responses (`[{...}]` → wrapped as `{data: [...]}`).
+  Future<List<Map<String, dynamic>>> getList(
+    String path, {
+    Map<String, dynamic>? params,
+  }) async {
+    final res = await get(path, params: params);
+    return listFromResponse(res);
+  }
+
+  static List<Map<String, dynamic>> listFromResponse(Map<String, dynamic> res) {
+    final data = res['data'];
+    if (data is List) {
+      return data
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+    return const [];
+  }
+
+  // --- Spinwheel admin (auth:sanctum + admin only) ---
+
+  Future<List<Map<String, dynamic>>> spinAdminWheels() =>
+      getList('/spinwheel/admin/wheels');
+
+  Future<Map<String, dynamic>> spinAdminWheel(Object id) =>
+      get('/spinwheel/admin/wheels/$id');
+
+  Future<List<Map<String, dynamic>>> spinAdminUsages({Object? userId}) =>
+      getList(
+        '/spinwheel/admin/usages',
+        params: {if (userId != null) 'user_id': userId},
+      );
+
+  Future<Map<String, dynamic>> spinAdminGrantUsages({
+    required Object userId,
+    required int count,
+    required int validHours,
+    String source = 'manual',
+  }) =>
+      post('/spinwheel/admin/usages/grant', body: {
+        'user_id': userId,
+        'count': count,
+        'valid_hours': validHours,
+        'source': source,
+      });
+
+  Future<Map<String, dynamic>> spinAdminAdjustUsage(
+    Object id, {
+    required String status,
+  }) =>
+      put('/spinwheel/admin/usages/$id', body: {'status': status});
+
+  Future<Map<String, dynamic>> spinAdminSettings() =>
+      get('/spinwheel/admin/settings');
+
+  Future<Map<String, dynamic>> spinAdminUpdateSettings(
+    Map<String, dynamic> body,
+  ) =>
+      put('/spinwheel/admin/settings', body: body);
+
+  Future<List<Map<String, dynamic>>> spinAdminPromos() =>
+      getList('/spinwheel/admin/promos');
+
+  Future<List<Map<String, dynamic>>> spinAdminRewards({
+    String? q,
+    String? audience,
+    String? status,
+    String? from,
+    String? to,
+  }) =>
+      getList('/spinwheel/admin/rewards', params: {
+        if (q != null && q.isNotEmpty) 'q': q,
+        if (audience != null && audience.isNotEmpty && audience != 'all')
+          'audience': audience,
+        if (status != null && status.isNotEmpty) 'status': status,
+        if (from != null && from.isNotEmpty) 'from': from,
+        if (to != null && to.isNotEmpty) 'to': to,
+      });
+
+  Future<Map<String, dynamic>> spinAdminReward(Object id) =>
+      get('/spinwheel/admin/rewards/$id');
+
+  Future<Map<String, dynamic>> spinAdminClaimReward(
+    Object id, {
+    bool overrideExpired = false,
+  }) =>
+      post('/spinwheel/admin/rewards/$id/claim', body: {
+        'override_expired': overrideExpired,
+      });
+
+  Future<List<Map<String, dynamic>>> spinAdminGuestSpins({
+    String? q,
+    String? status,
+  }) =>
+      getList('/spinwheel/admin/guest-spins', params: {
+        if (q != null && q.isNotEmpty) 'q': q,
+        if (status != null && status.isNotEmpty) 'status': status,
+      });
+
+  Future<Map<String, dynamic>> spinAdminCreateGuestSpin({int? validHours}) =>
+      post('/spinwheel/admin/guest-spins', body: {
+        if (validHours != null) 'valid_hours': validHours,
+      });
+
+  Future<Map<String, dynamic>> spinAdminGuestSpin(Object id) =>
+      get('/spinwheel/admin/guest-spins/$id');
+
+  Future<Map<String, dynamic>> spinAdminRevokeGuestSpin(Object id) =>
+      post('/spinwheel/admin/guest-spins/$id/revoke', body: const {});
+
   Future<Map<String, dynamic>> postMultipart(
     String path, {
     required String fileField,

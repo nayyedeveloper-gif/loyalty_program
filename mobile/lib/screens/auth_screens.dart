@@ -28,7 +28,7 @@ class _SplashScreenState extends State<SplashScreen> {
       return;
     }
     if (!mounted) return;
-    context.go(auth.isCustomer ? '/app' : '/landing');
+    context.go(auth.homeRoute);
   }
 
   @override
@@ -216,18 +216,16 @@ class _SignInScreenState extends State<SignInScreen> {
       error = null;
     });
     try {
-      final user = await context.read<AuthProvider>().login(email.text.trim(), password.text);
+      final auth = context.read<AuthProvider>();
+      final user = await auth.login(email.text.trim(), password.text);
       if (!mounted) return;
-      if (!user.isCustomer) {
-        await context.read<AuthProvider>().logout();
-        setState(() => error = t('membersOnly'));
-        return;
+      if (user.isCustomer) {
+        final notice = await auth.consumeSpinGrantNotice();
+        if (mounted && notice?['message'] != null) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${notice!['message']}')));
+        }
       }
-      final notice = await context.read<AuthProvider>().consumeSpinGrantNotice();
-      if (mounted && notice?['message'] != null) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${notice!['message']}')));
-      }
-      if (mounted) context.go('/app');
+      if (mounted) context.go(auth.homeRoute);
     } catch (e) {
       setState(() => error = getErrorMessage(e, t('somethingWrong')));
     } finally {
@@ -249,7 +247,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 child: IconButton(onPressed: () => context.go('/landing'), icon: const Icon(Icons.arrow_back)),
               ),
               const SizedBox(height: 8),
-              const BrandMark(size: 72),
+              const BrandMark(size: 120),
               const SizedBox(height: 20),
               Text(t('welcomeBack'), style: Theme.of(context).textTheme.headlineSmall),
               Text(t('signInSubtitle'), style: Theme.of(context).textTheme.bodySmall),

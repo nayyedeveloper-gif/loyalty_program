@@ -240,9 +240,10 @@ class _CustomerSpinScreenState extends State<CustomerSpinScreen> with SingleTick
 
   void _showHelp() {
     final t = context.read<LanguageProvider>().t;
+    final palette = AppPalette.of(context);
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: palette.surface,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => Padding(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
@@ -250,11 +251,17 @@ class _CustomerSpinScreenState extends State<CustomerSpinScreen> with SingleTick
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(t('spinHelp'), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+            Text(
+              t('spinHelp'),
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: palette.ink),
+            ),
             const SizedBox(height: 10),
-            Text(state?.helpText?.isNotEmpty == true
-                ? state!.helpText!
-                : 'Use a spin credit, watch the wheel land, then show your reward code in store if collection is required.'),
+            Text(
+              state?.helpText?.isNotEmpty == true
+                  ? state!.helpText!
+                  : 'Use a spin credit, watch the wheel land, then show your reward code in store if collection is required.',
+              style: TextStyle(color: palette.inkSoft),
+            ),
             const SizedBox(height: 16),
             GradientButton(label: t('done'), onPressed: () => Navigator.pop(ctx)),
           ],
@@ -523,8 +530,21 @@ class _PremiumWheel extends StatelessWidget {
   final int highlightIndex;
   final bool spinning;
 
+  Color _sliceColor(SpinSegment segment, int index) {
+    final raw = segment.color?.trim();
+    if (raw != null && raw.isNotEmpty) {
+      final hex = raw.startsWith('#') ? raw.substring(1) : raw;
+      if (hex.length == 6) {
+        final value = int.tryParse(hex, radix: 16);
+        if (value != null) return Color(0xFF000000 | value);
+      }
+    }
+    return _palette[index % _palette.length];
+  }
+
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     final items = segments.isEmpty
         ? [
             SpinSegment(index: 0, label: 'Prize'),
@@ -533,6 +553,7 @@ class _PremiumWheel extends StatelessWidget {
         : segments.length == 1
             ? [segments.first, SpinSegment(index: 1, label: '•')]
             : segments;
+    final rim = palette.isDark ? palette.surface : Colors.white;
 
     return Container(
       width: 320,
@@ -554,7 +575,7 @@ class _PremiumWheel extends StatelessWidget {
           Container(
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 8),
+              border: Border.all(color: rim, width: 8),
               gradient: const SweepGradient(colors: [
                 AppColors.primaryLight,
                 AppColors.primary,
@@ -580,21 +601,15 @@ class _PremiumWheel extends StatelessWidget {
                 for (var i = 0; i < items.length; i++)
                   FortuneItem(
                     child: Padding(
-                      padding: const EdgeInsets.only(left: 18),
-                      child: Text(
-                        items[i].label.length > 12 ? '${items[i].label.substring(0, 12)}…' : items[i].label,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 11,
-                          color: _palette[i % _palette.length].computeLuminance() > 0.72
-                              ? const Color(0xFF1E3A8A)
-                              : Colors.white,
-                        ),
+                      padding: const EdgeInsets.only(left: 10),
+                      child: _WheelSliceContent(
+                        segment: items[i],
+                        sliceColor: _sliceColor(items[i], i),
                       ),
                     ),
                     style: FortuneItemStyle(
-                      color: _palette[i % _palette.length],
-                      borderColor: Colors.white.withValues(alpha: 0.55),
+                      color: _sliceColor(items[i], i),
+                      borderColor: rim.withValues(alpha: 0.55),
                       borderWidth: 1.2,
                     ),
                   ),
@@ -608,7 +623,7 @@ class _PremiumWheel extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: AppColors.gradientPrimary,
-                border: Border.all(color: Colors.white, width: 3),
+                border: Border.all(color: rim, width: 3),
                 boxShadow: [
                   BoxShadow(color: AppColors.primaryDark.withValues(alpha: 0.35), blurRadius: 12),
                 ],
@@ -621,6 +636,74 @@ class _PremiumWheel extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _WheelSliceContent extends StatelessWidget {
+  const _WheelSliceContent({required this.segment, required this.sliceColor});
+
+  final SpinSegment segment;
+  final Color sliceColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageSrc = AppConfig.mediaUrl(segment.imageUrl);
+    final light = sliceColor.computeLuminance() > 0.72;
+    final labelColor = light ? const Color(0xFF1E3A8A) : Colors.white;
+    final label = segment.label.length > 10 ? '${segment.label.substring(0, 10)}…' : segment.label;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (imageSrc.isNotEmpty)
+          Container(
+            width: 34,
+            height: 34,
+            margin: const EdgeInsets.only(bottom: 4),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.white.withValues(alpha: 0.92),
+              border: Border.all(color: Colors.white70),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: CachedNetworkImage(
+              imageUrl: imageSrc,
+              fit: BoxFit.contain,
+              errorWidget: (_, __, ___) => Center(
+                child: Text(
+                  segment.label.isNotEmpty ? segment.label[0].toUpperCase() : '?',
+                  style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF1E3A8A)),
+                ),
+              ),
+            ),
+          )
+        else
+          Container(
+            width: 28,
+            height: 28,
+            margin: const EdgeInsets.only(bottom: 4),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.white.withValues(alpha: 0.9),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              segment.label.isNotEmpty ? segment.label[0].toUpperCase() : '?',
+              style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF1E3A8A)),
+            ),
+          ),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 10,
+            color: labelColor,
+            height: 1.1,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -683,8 +766,10 @@ class _RewardsTab extends StatelessWidget {
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (_, i) {
                     final r = rewards[i];
+                    final palette = AppPalette.of(context);
                     return Card(
                       clipBehavior: Clip.antiAlias,
+                      color: palette.surface,
                       child: InkWell(
                         onTap: () => onOpen(r),
                         child: Row(
@@ -694,14 +779,14 @@ class _RewardsTab extends StatelessWidget {
                               height: 88,
                               child: r.imageUrl == null || r.imageUrl!.isEmpty
                                   ? Container(
-                                      color: AppColors.primarySoft,
+                                      color: palette.primarySoft,
                                       alignment: Alignment.center,
                                       child: Text(
                                         (r.prizeName ?? '?').characters.first.toUpperCase(),
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 28,
                                           fontWeight: FontWeight.w900,
-                                          color: AppColors.primaryDark,
+                                          color: palette.onSoft,
                                         ),
                                       ),
                                     )
@@ -716,7 +801,10 @@ class _RewardsTab extends StatelessWidget {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(r.prizeName ?? 'Reward', style: const TextStyle(fontWeight: FontWeight.w800)),
+                                    Text(
+                                      r.prizeName ?? 'Reward',
+                                      style: TextStyle(fontWeight: FontWeight.w800, color: palette.ink),
+                                    ),
                                     const SizedBox(height: 4),
                                     _StatusChip(status: r.displayStatus, label: r.statusLabel),
                                     if (r.rewardCode != null) ...[
@@ -726,15 +814,15 @@ class _RewardsTab extends StatelessWidget {
                                     if (r.readyToCollect && r.claimDeadlineAt != null)
                                       Text(
                                         'Collect by ${formatDate(r.claimDeadlineAt)}',
-                                        style: const TextStyle(fontSize: 12, color: AppColors.primaryDark),
+                                        style: TextStyle(fontSize: 12, color: palette.onSoft),
                                       ),
                                   ],
                                 ),
                               ),
                             ),
-                            const Padding(
-                              padding: EdgeInsets.only(right: 8),
-                              child: Icon(Icons.chevron_right, color: AppColors.muted),
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: Icon(Icons.chevron_right, color: palette.muted),
                             ),
                           ],
                         ),
@@ -799,15 +887,16 @@ class _RewardDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return DraggableScrollableSheet(
       initialChildSize: 0.78,
       minChildSize: 0.5,
       maxChildSize: 0.95,
       builder: (context, controller) {
         return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          decoration: BoxDecoration(
+            color: palette.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: ListView(
             controller: controller,
@@ -818,7 +907,7 @@ class _RewardDetailSheet extends StatelessWidget {
                   width: 42,
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 14),
-                  decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(99)),
+                  decoration: BoxDecoration(color: palette.line, borderRadius: BorderRadius.circular(99)),
                 ),
               ),
               if (isWin)
@@ -842,18 +931,21 @@ class _RewardDetailSheet extends StatelessWidget {
                   aspectRatio: 16 / 10,
                   child: reward.imageUrl == null || reward.imageUrl!.isEmpty
                       ? Container(
-                          color: AppColors.primarySoft,
+                          color: palette.primarySoft,
                           alignment: Alignment.center,
                           child: Text(
                             (reward.prizeName ?? '?').characters.first.toUpperCase(),
-                            style: const TextStyle(fontSize: 56, fontWeight: FontWeight.w900, color: AppColors.primaryDark),
+                            style: TextStyle(fontSize: 56, fontWeight: FontWeight.w900, color: palette.onSoft),
                           ),
                         )
                       : CachedNetworkImage(imageUrl: AppConfig.mediaUrl(reward.imageUrl), fit: BoxFit.cover),
                 ),
               ),
               const SizedBox(height: 14),
-              Text(reward.prizeName ?? 'Reward', style: Theme.of(context).textTheme.headlineSmall),
+              Text(
+                reward.prizeName ?? 'Reward',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: palette.ink),
+              ),
               const SizedBox(height: 6),
               _StatusChip(status: reward.displayStatus, label: reward.statusLabel),
               if (reward.winningMessage?.isNotEmpty == true) ...[
@@ -862,33 +954,36 @@ class _RewardDetailSheet extends StatelessWidget {
               ],
               if (reward.description?.isNotEmpty == true) ...[
                 const SizedBox(height: 10),
-                Text(reward.description!),
+                Text(reward.description!, style: TextStyle(color: palette.inkSoft)),
               ],
               const SizedBox(height: 14),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: AppColors.surface2,
+                  color: palette.surface2,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.line),
+                  border: Border.all(color: palette.line),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       reward.readyToCollect ? 'Show this code to staff' : 'Reward reference',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.muted),
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: palette.muted),
                     ),
                     const SizedBox(height: 6),
                     SelectableText(
                       reward.rewardCode ?? '—',
-                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 1),
+                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 1, color: palette.ink),
                     ),
                     if (reward.readyToCollect)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 6),
-                        child: Text('Present this code in store to collect your prize.'),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          'Present this code in store to collect your prize.',
+                          style: TextStyle(color: palette.inkSoft),
+                        ),
                       ),
                   ],
                 ),

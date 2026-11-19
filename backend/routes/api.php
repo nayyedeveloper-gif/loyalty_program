@@ -66,10 +66,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/chat/conversations/{conversation}/messages', [ChatController::class, 'messages']);
     Route::post('/chat/conversations/{conversation}/messages', [ChatController::class, 'send']);
     Route::put('/chat/conversations/{conversation}/messages/{message}', [ChatController::class, 'updateMessage']);
+    Route::delete('/chat/conversations/{conversation}/messages/{message}', [ChatController::class, 'deleteMessage']);
     Route::post('/chat/conversations/{conversation}/read', [ChatController::class, 'markRead']);
     Route::post('/chat/conversations/{conversation}/delivered', [ChatController::class, 'markDelivered']);
     Route::post('/chat/conversations/{conversation}/typing', [ChatController::class, 'typing']);
-    Route::post('/chat/conversations/{conversation}/call', [ChatController::class, 'callSignal']);
 });
 
 // Shop portal: admin + staff

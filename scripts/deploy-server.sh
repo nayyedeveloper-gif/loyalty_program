@@ -105,6 +105,18 @@ server {
         add_header Cache-Control 'public';
     }
 
+    location ^~ /downloads/ {
+        types { application/vnd.android.package-archive apk; }
+        default_type application/vnd.android.package-archive;
+        add_header Content-Disposition 'attachment' always;
+        add_header Cache-Control "public, max-age=3600" always;
+        try_files $uri =404;
+    }
+
+    location ^~ /download {
+        try_files $uri $uri/ /download/index.html;
+    }
+
     location / {
         try_files $uri $uri/ /index.html;
     }

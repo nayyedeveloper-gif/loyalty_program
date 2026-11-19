@@ -44,6 +44,7 @@ export default function ChatInbox() {
     loadConversations,
     sendMessage,
     editMessage,
+    deleteMessage,
     typingLabel,
     notifyTyping,
     closeMessenger,
@@ -306,6 +307,7 @@ export default function ChatInbox() {
               typingLabel={typingLabel}
               sendMessage={sendMessage}
               editMessage={editMessage}
+              deleteMessage={deleteMessage}
               notifyTyping={notifyTyping}
               title={threadTitle}
               subtitle={threadSubtitle}
@@ -332,14 +334,6 @@ export default function ChatInbox() {
                   </button>
                 )
               }
-              onIncomingInvite={(conversationId) => {
-                openMessenger({ conversationId })
-                if (conversationId) {
-                  setStaffMode('thread')
-                  setSearchParams({ c: String(conversationId) }, { replace: true })
-                  openConversation(conversationId)
-                }
-              }}
               t={t}
               lang={lang}
             />

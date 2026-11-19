@@ -1,48 +1,43 @@
 # 29 Gold Membership — Flutter app
 
-Native Android / iOS member app for the 29 Gold & Jewellery loyalty program. It covers the same customer surface as the website (`/app`), talking to the existing Laravel Sanctum API.
+Native Android / iOS member app for the 29 Gold & Jewellery loyalty program. Same customer surface as the website (`/app`), talking to the Laravel Sanctum API.
 
 ## Features
 
 - Landing, sign in, sign up, forgot password (email OTP)
-- Membership home with QR (`29G:{customer_code}`), tier, points, expiry
+- Membership home (Figma-aligned): greeting, VIP gradient card, QR, next-tier progress, quick actions
 - Spin wheel (credits, promos, rewards) + guest spin deep link
 - Purchase history & receipts
-- Points activity (filters)
+- Points activity
 - Rewards catalog & redemptions
 - Missions, community referrals, product reviews
+- **Support chat** (same `/api/chat/*` as web inbox)
 - Notifications, settings (profile, avatar, password, theme, EN/MY)
 - FAQ, about, help & feedback
 - Guest spin: `/guest/:token`
 
 Admin/staff portals stay on the web app.
 
-## Prerequisites
+## API (default = production)
 
-- [Flutter](https://docs.flutter.dev/get-started/install) 3.50+ (Dart 3.14+)
-- Running backend: `cd backend && php artisan serve` (port 8000)
-- Android Studio emulator / device, or Xcode for iOS
+By default the app uses the **deployed** membership API and database:
 
-## Configure API URL
+| | |
+|---|---|
+| Origin | `https://loyalty.29jewellery.com` |
+| API | `https://loyalty.29jewellery.com/api` |
 
-Defaults (Android emulator → host machine):
+No local Laravel / MySQL required for day-to-day testing.
 
-| Flag | Default |
-|------|---------|
-| `API_BASE_URL` | `http://10.0.2.2:8000/api` |
-| `API_ORIGIN` | `http://10.0.2.2:8000` |
-
-Examples:
+### Override to local backend (optional)
 
 ```bash
-# Physical Android device on same Wi‑Fi (use your PC LAN IP)
+# Android emulator → host machine
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/api --dart-define=API_ORIGIN=http://10.0.2.2:8000
+
+# Physical device on LAN
 flutter run --dart-define=API_BASE_URL=http://192.168.1.20:8000/api --dart-define=API_ORIGIN=http://192.168.1.20:8000
-
-# iOS simulator (localhost is the Mac)
-flutter run --dart-define=API_BASE_URL=http://127.0.0.1:8000/api --dart-define=API_ORIGIN=http://127.0.0.1:8000
 ```
-
-Ensure Laravel CORS / Sanctum accepts the mobile origin, and that `php artisan serve` is reachable from the device.
 
 ## Run
 
@@ -52,19 +47,19 @@ flutter pub get
 flutter run
 ```
 
-Demo customer: `customer@29gold.com` / `password123`
+Use a real customer account from production, or a demo account if still seeded on the server.
 
 ## Project layout
 
 ```
 lib/
   main.dart / app.dart
-  core/          # API, config, theme, storage
+  core/          # API, config (prod default), theme, storage
   models/
-  providers/     # auth, language, theme, notifications
+  providers/     # auth, language, theme, notifications (+ chat unread)
   l10n/
   router/
-  screens/       # all member screens
+  screens/       # member + chat screens
   widgets/
 ```
 

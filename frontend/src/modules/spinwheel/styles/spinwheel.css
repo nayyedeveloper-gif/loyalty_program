@@ -327,8 +327,8 @@ html[data-lang="my"] .guest-shell .cx-brand {
     overflow: hidden;
     padding: 1.65rem 1.1rem 1.5rem;
     background:
-      radial-gradient(680px 280px at 50% 0%, rgba(59, 130, 246, 0.12), transparent 60%),
-      linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
+      radial-gradient(680px 280px at 50% 0%, color-mix(in srgb, var(--color-primary) 14%, transparent), transparent 60%),
+      linear-gradient(180deg, var(--cx-surface) 0%, var(--cx-surface-2) 100%);
 }
 .wheel-panel::before {
     content: "";
@@ -496,11 +496,11 @@ html[data-lang="my"] .guest-shell .cx-brand {
     height: var(--wheel-art);
     border-radius: 18%;
     padding: 4px;
-    background: linear-gradient(160deg, #ffffff, #eff6ff);
-    border: 2px solid #93c5fd;
+    background: linear-gradient(160deg, var(--cx-surface), var(--cx-surface-2));
+    border: 2px solid color-mix(in srgb, var(--color-primary) 45%, var(--cx-border));
     box-shadow:
-        0 4px 14px rgba(37, 99, 235, 0.16),
-        inset 0 1px 0 rgba(255,255,255,.95);
+        0 4px 14px color-mix(in srgb, var(--color-primary) 16%, transparent),
+        inset 0 1px 0 color-mix(in srgb, var(--cx-surface) 80%, transparent);
     display: grid;
     place-items: center;
     overflow: hidden;
@@ -520,12 +520,12 @@ html[data-lang="my"] .guest-shell .cx-brand {
     height: var(--wheel-art);
     border-radius: 18%;
     display: grid; place-items: center;
-    background: linear-gradient(160deg, #ffffff, #dbeafe);
-    border: 2px solid #93c5fd;
+    background: linear-gradient(160deg, var(--cx-surface), var(--cx-surface-2));
+    border: 2px solid color-mix(in srgb, var(--color-primary) 45%, var(--cx-border));
     font-size: calc(var(--wheel-art) * 0.42);
     font-weight: 700;
-    color: #1d4ed8;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.14);
+    color: var(--color-primary);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--color-primary) 14%, transparent);
 }
 .wheel-seg-label {
     font-size: clamp(0.62rem, 1.7vw, 0.78rem);
@@ -571,15 +571,16 @@ html[data-lang="my"] .guest-shell .cx-brand {
     width: min(300px, calc(100vw - 16px));
     padding: 0.75rem 0.85rem;
     border-radius: 1rem;
-    border: 1px solid #bfdbfe;
+    border: 1px solid var(--cx-border);
     background:
-      linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
+      linear-gradient(180deg, var(--cx-surface) 0%, var(--cx-surface-2) 100%);
     box-shadow:
-      0 16px 36px rgba(37, 99, 235, 0.16),
-      0 2px 0 rgba(255, 255, 255, 0.8) inset;
+      0 16px 36px color-mix(in srgb, var(--color-primary) 16%, transparent),
+      0 2px 0 color-mix(in srgb, var(--cx-surface) 80%, transparent) inset;
     text-align: left;
     pointer-events: none;
     animation: tip-in 0.14s ease-out;
+    color: var(--cx-ink);
 }
 .wheel-prize-tip-media {
     width: 56px;
@@ -587,8 +588,8 @@ html[data-lang="my"] .guest-shell .cx-brand {
     flex-shrink: 0;
     border-radius: 14px;
     overflow: hidden;
-    border: 1px solid #93c5fd;
-    background: linear-gradient(160deg, #ffffff, #eff6ff);
+    border: 1px solid var(--cx-border);
+    background: linear-gradient(160deg, var(--cx-surface), var(--cx-surface-2));
     display: grid;
     place-items: center;
 }
@@ -600,7 +601,7 @@ html[data-lang="my"] .guest-shell .cx-brand {
 .wheel-prize-tip-fallback {
     font-size: 1.35rem;
     font-weight: 800;
-    color: #1d4ed8;
+    color: var(--color-primary);
 }
 .wheel-prize-tip-body {
     min-width: 0;
@@ -614,23 +615,23 @@ html[data-lang="my"] .guest-shell .cx-brand {
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: #1d4ed8;
-    background: linear-gradient(135deg, #eff6ff, #dbeafe);
-    border: 1px solid #93c5fd;
+    color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 14%, var(--cx-surface));
+    border: 1px solid color-mix(in srgb, var(--color-primary) 35%, var(--cx-border));
     border-radius: 999px;
     padding: 0.15rem 0.5rem;
 }
 .wheel-prize-tip-title {
     font-size: 0.98rem;
     font-weight: 700;
-    color: #1e3a8a;
+    color: var(--cx-ink);
     line-height: 1.25;
 }
 .wheel-prize-tip-text {
     margin: 0;
     font-size: 0.82rem;
     line-height: 1.45;
-    color: #475569;
+    color: var(--cx-muted);
     display: -webkit-box;
     -webkit-line-clamp: 4;
     -webkit-box-orient: vertical;
@@ -971,12 +972,12 @@ html[data-lang="my"] .guest-shell .cx-brand {
     margin-right: auto;
 }
 .spin-stats .cx-stat {
-    background: linear-gradient(180deg, #ffffff, #f8fbff);
-    border-color: #dbeafe;
-    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.06);
+    background: linear-gradient(180deg, var(--cx-surface), var(--cx-surface-2));
+    border-color: var(--cx-border);
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--color-primary) 6%, transparent);
 }
 .spin-stats .cx-stat strong {
-    color: #1e3a8a;
+    color: var(--cx-ink);
 }
 .spins-remaining-pill {
     display: inline-flex;
@@ -985,19 +986,19 @@ html[data-lang="my"] .guest-shell .cx-brand {
     margin-top: 0.35rem;
     padding: 0.4rem 0.9rem;
     border-radius: 999px;
-    background: linear-gradient(135deg, #eff6ff, #dbeafe);
-    border: 1px solid #93c5fd;
-    color: #1d4ed8;
+    background: color-mix(in srgb, var(--color-primary) 14%, var(--cx-surface));
+    border: 1px solid color-mix(in srgb, var(--color-primary) 35%, var(--cx-border));
+    color: var(--color-primary);
     font-size: 0.86rem;
     font-weight: 700;
 }
 .modal-panel.win-modal-panel,
 .modal-panel.major-win {
-    border: 1px solid #bfdbfe;
+    border: 1px solid var(--cx-border);
     background:
-      radial-gradient(420px 180px at 50% 0%, rgba(59, 130, 246, 0.14), transparent 70%),
-      linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-    box-shadow: 0 28px 64px rgba(37, 99, 235, 0.18);
+      radial-gradient(420px 180px at 50% 0%, color-mix(in srgb, var(--color-primary) 14%, transparent), transparent 70%),
+      linear-gradient(180deg, var(--cx-surface) 0%, var(--cx-surface-2) 100%);
+    box-shadow: 0 28px 64px color-mix(in srgb, var(--color-primary) 18%, transparent);
 }
 .win-success-mark {
     width: 56px;
@@ -1016,11 +1017,11 @@ html[data-lang="my"] .guest-shell .cx-brand {
 }
 .reward-detail--win .ref-box {
     width: min(100%, 22rem);
-    border-color: #bfdbfe;
-    background: linear-gradient(180deg, #ffffff, #eff6ff);
+    border-color: var(--cx-border);
+    background: linear-gradient(180deg, var(--cx-surface), var(--cx-surface-2));
 }
 .reward-detail--win .ref-box-code {
-    color: #1e3a8a;
+    color: var(--cx-ink);
 }
 
 .login-shell { min-height: 100vh; display: grid; place-items: center; padding: 1.5rem; }
@@ -1627,7 +1628,7 @@ html[data-lang="my"] .guest-shell .cx-brand {
     font-weight: 700;
     padding: 0.7rem 0.55rem;
     border-bottom: 1px solid var(--cx-border);
-    background: #f9fafb;
+    background: var(--cx-surface-2);
     font-size: 0.72rem;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -1643,7 +1644,7 @@ html[data-lang="my"] .guest-shell .cx-brand {
     border-radius: 0.75rem;
     padding: 0.85rem;
     margin: 0.75rem 0 0;
-    background: #f9fafb;
+    background: var(--cx-surface-2);
 }
 .seg-row-head {
     display: flex;
@@ -1657,7 +1658,7 @@ html[data-lang="my"] .guest-shell .cx-brand {
     border-radius: 0.5rem;
     object-fit: cover;
     border: 1px solid var(--cx-border);
-    background: #eee;
+    background: var(--cx-surface);
 }
 .image-picker {
     display: flex;
@@ -1667,7 +1668,7 @@ html[data-lang="my"] .guest-shell .cx-brand {
     padding: 0.85rem;
     border: 1px solid var(--cx-border);
     border-radius: 0.75rem;
-    background: #f9fafb;
+    background: var(--cx-surface-2);
 }
 .image-picker-preview {
     width: 96px; height: 96px;
@@ -1686,7 +1687,7 @@ html[data-lang="my"] .guest-shell .cx-brand {
 .image-picker-empty {
     font-size: 1.8rem;
     font-weight: 800;
-    color: #9ca3af;
+    color: var(--cx-muted);
 }
 .image-picker-actions { min-width: 0; flex: 1; }
 .image-picker-input {
@@ -1907,6 +1908,56 @@ html[data-theme="dark"] .spinwheel-preview-panel {
     background: linear-gradient(180deg, var(--color-surface), var(--color-surface-2)) !important;
     border-color: var(--color-line) !important;
     color: var(--color-ink) !important;
+}
+html[data-theme="dark"] .wheel-panel,
+html[data-theme="dark"] .spinwheel-admin .admin-card,
+html[data-theme="dark"] .spinwheel-admin .seg-row,
+html[data-theme="dark"] .spinwheel-admin .image-picker,
+html[data-theme="dark"] .spinwheel-admin .admin-table th {
+    background: var(--color-surface-2);
+    color: var(--color-ink);
+}
+html[data-theme="dark"] .spinwheel-admin .admin-card {
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-primary) 10%, var(--color-surface)),
+      var(--color-surface)
+    );
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+}
+html[data-theme="dark"] .spinwheel-admin .admin-input,
+html[data-theme="dark"] .spinwheel-admin .admin-select,
+html[data-theme="dark"] .spinwheel-admin .admin-textarea,
+html[data-theme="dark"] .spinwheel-admin .image-picker-preview,
+html[data-theme="dark"] .spinwheel-admin .seg-thumb {
+    background: var(--color-surface);
+    color: var(--color-ink);
+    border-color: var(--color-line);
+}
+html[data-theme="dark"] .spinwheel-admin .admin-nav-label,
+html[data-theme="dark"] .spinwheel-admin .admin-crumbs,
+html[data-theme="dark"] .spinwheel-admin .admin-module-chevron,
+html[data-theme="dark"] .spinwheel-admin .image-picker-empty {
+    color: var(--color-muted);
+}
+html[data-theme="dark"] .skeleton,
+html[data-theme="dark"] .admin-body .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--color-surface-2),
+      color-mix(in srgb, var(--color-surface) 70%, var(--color-line)),
+      var(--color-surface-2)
+    );
+    background-size: 200% 100%;
+}
+html[data-theme="dark"] .wheel-seg-art,
+html[data-theme="dark"] .wheel-seg-fallback,
+html[data-theme="dark"] .wheel-prize-tip,
+html[data-theme="dark"] .wheel-hub,
+html[data-theme="dark"] .modal-panel {
+    background: var(--color-surface);
+    border-color: var(--color-line);
+    color: var(--color-ink);
 }
 
 

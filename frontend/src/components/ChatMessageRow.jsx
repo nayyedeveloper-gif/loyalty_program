@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { ChatMessageBody } from './ChatMessageBody'
 import ChatMessageReceipt from './ChatMessageReceipt'
-import { faCheck, faPenToSquare, faReply, faXmark } from '../lib/icons'
+import { faCheck, faPenToSquare, faReply, faTrash, faXmark } from '../lib/icons'
 
 function formatTime(iso, lang) {
   if (!iso) return ''
@@ -24,6 +24,7 @@ export default function ChatMessageRow({
   isStaff,
   onReply,
   onEdit,
+  onDelete,
   t,
   lang,
 }) {
@@ -31,11 +32,13 @@ export default function ChatMessageRow({
   const [editing, setEditing] = useState(false)
   const [editDraft, setEditDraft] = useState('')
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const touchRef = useRef(null)
   // Keep file on a solid bubble — transparent rich chrome makes white
   // file labels invisible in light mode (same issue voice had).
   const rich = ['image', 'gif', 'sticker'].includes(message.type)
   const canEditBody = mine && message.type === 'text'
+  const canDelete = mine || isStaff
 
   function beginEdit() {
     if (!canEditBody) return
@@ -55,6 +58,18 @@ export default function ChatMessageRow({
       setEditing(false)
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function confirmDelete() {
+    if (!canDelete || deleting) return
+    const ok = window.confirm(t('chatDeleteConfirm'))
+    if (!ok) return
+    setDeleting(true)
+    try {
+      await onDelete?.(message.id)
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -203,6 +218,18 @@ export default function ChatMessageRow({
                 title={t('chatEditMessage')}
               >
                 <FontAwesomeIcon icon={faPenToSquare} aria-hidden="true" />
+              </button>
+            ) : null}
+            {canDelete ? (
+              <button
+                type="button"
+                className="chat-bubble-action"
+                onClick={confirmDelete}
+                disabled={deleting}
+                aria-label={t('chatDeleteMessage')}
+                title={t('chatDeleteMessage')}
+              >
+                <FontAwesomeIcon icon={faTrash} aria-hidden="true" />
               </button>
             ) : null}
           </div>
