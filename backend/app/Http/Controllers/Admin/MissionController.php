@@ -30,7 +30,7 @@ class MissionController extends Controller
         }
 
         return response()->json([
-            'missions' => $query->paginate((int) $request->integer('per_page', 20)),
+            'missions' => $query->paginate($this->perPage($request, 20, 200)),
         ]);
     }
 

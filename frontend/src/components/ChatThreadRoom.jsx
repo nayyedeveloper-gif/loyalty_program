@@ -1,10 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { pickVoiceMime } from './ChatMessageBody'
-import ChatCallOverlay from './ChatCallOverlay'
 import ChatMessageRow from './ChatMessageRow'
 import ChatPhotoPicker from './ChatPhotoPicker'
-import { useChatCall } from '../hooks/useChatCall'
 import { CHAT_EMOJIS, formatDuration } from '../lib/chatMedia'
 import { fetchGifCategories, fetchGifs, gifSearchPlaceholder } from '../lib/gifApi'
 import {
@@ -16,7 +14,6 @@ import {
   faMicrophone,
   faPaperclip,
   faPaperPlane,
-  faPhone,
   faStar,
   faStop,
   faReply,
@@ -33,12 +30,12 @@ export default function ChatThreadRoom({
   typingLabel = '',
   sendMessage,
   editMessage,
+  deleteMessage,
   notifyTyping,
   title,
   subtitle,
   headerLeading = null,
   headerActions = null,
-  onIncomingInvite = null,
   t,
   lang,
 }) {
@@ -67,33 +64,9 @@ export default function ChatThreadRoom({
   const recordStartedAtRef = useRef(0)
   const gifRequestIdRef = useRef(0)
 
-  const callPeerName = useMemo(() => {
-    if (isStaff) return activeConversation?.customer?.name || t('customer')
-    return t('chatSupportAgent')
-  }, [isStaff, activeConversation, t])
-
-  const {
-    call,
-    muted,
-    error: callError,
-    remoteAudioRef,
-    startCall,
-    acceptCall,
-    rejectCall,
-    endCall,
-    toggleMute,
-  } = useChatCall({
-    user,
-    conversationId: activeConversation?.id || null,
-    peerName: callPeerName,
-    isStaff,
-    onIncomingInvite,
-  })
-
   const showGifResults = !!gifDebouncedQuery.trim() || !!gifCategory
   const pickerOpen = picker === 'gif' || picker === 'emoji' || picker === 'photo'
   const canSendText = !!draft.trim() && !sending && !!activeConversation
-  const canCall = !!activeConversation?.id && !sending
 
   useEffect(() => {
     const el = listRef.current
@@ -390,33 +363,9 @@ export default function ChatThreadRoom({
           </div>
         </div>
         <div className="chat-panel-head-actions">
-          {canCall ? (
-            <button
-              type="button"
-              className="chat-icon-btn chat-call-head-btn"
-              onClick={() => startCall()}
-              aria-label={t('chatCallAudio')}
-              title={t('chatCallAudio')}
-              disabled={!!call}
-            >
-              <FontAwesomeIcon icon={faPhone} aria-hidden="true" />
-            </button>
-          ) : null}
           {headerActions}
         </div>
       </header>
-
-      <ChatCallOverlay
-        call={call}
-        muted={muted}
-        error={callError}
-        remoteAudioRef={remoteAudioRef}
-        onAccept={acceptCall}
-        onReject={rejectCall}
-        onEnd={endCall}
-        onToggleMute={toggleMute}
-        t={t}
-      />
 
       {!activeConversation ? (
         <div className="chat-empty is-select">
@@ -440,6 +389,7 @@ export default function ChatThreadRoom({
                   inputRef.current?.focus()
                 }}
                 onEdit={editMessage}
+                onDelete={deleteMessage}
                 t={t}
                 lang={lang}
               />

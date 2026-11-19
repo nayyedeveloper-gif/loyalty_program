@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Events\ChatCallSignal;
+use App\Events\ChatMessageDeleted;
 use App\Events\ChatMessageReceipt;
 use App\Events\ChatMessageSent;
 use App\Events\ChatMessageUpdated;
@@ -464,6 +464,30 @@ class ChatController extends Controller
         ]);
     }
 
+    public function deleteMessage(Request $request, ChatConversation $conversation, ChatMessage $message): JsonResponse
+    {
+        $user = $request->user();
+        $this->authorizeConversation($user, $conversation);
+
+        if ((int) $message->conversation_id !== (int) $conversation->id) {
+            abort(404);
+        }
+        if ((int) $message->sender_id !== (int) $user->id && ! $user->isPortalUser()) {
+            abort(403, 'You can only delete your own messages.');
+        }
+
+        $messageId = (int) $message->id;
+        $message->delete();
+
+        broadcast(ChatMessageDeleted::fromConversation($conversation, $messageId));
+
+        return response()->json([
+            'ok' => true,
+            'message_id' => $messageId,
+            'conversation_id' => (int) $conversation->id,
+        ]);
+    }
+
     public function markDelivered(Request $request, ChatConversation $conversation): JsonResponse
     {
         $user = $request->user();
@@ -538,32 +562,6 @@ class ChatController extends Controller
             userId: (int) $user->id,
             name: (string) $user->name,
             typing: (bool) $data['typing'],
-        ))->toOthers();
-
-        return response()->json(['ok' => true]);
-    }
-
-    public function callSignal(Request $request, ChatConversation $conversation): JsonResponse
-    {
-        $user = $request->user();
-        $this->authorizeConversation($user, $conversation);
-
-        $data = $request->validate([
-            'action' => ['required', Rule::in(['invite', 'accept', 'reject', 'end', 'offer', 'answer', 'ice'])],
-            'call_type' => ['required', Rule::in(['audio'])],
-            'call_id' => ['required', 'string', 'max:64'],
-            'payload' => ['nullable', 'array'],
-        ]);
-
-        broadcast(new ChatCallSignal(
-            conversationId: (int) $conversation->id,
-            fromUserId: (int) $user->id,
-            fromName: (string) $user->name,
-            action: (string) $data['action'],
-            callType: (string) $data['call_type'],
-            callId: (string) $data['call_id'],
-            payload: $data['payload'] ?? null,
-            customerId: (int) $conversation->customer_id,
         ))->toOthers();
 
         return response()->json(['ok' => true]);

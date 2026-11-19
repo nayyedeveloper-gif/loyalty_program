@@ -10,6 +10,7 @@ use App\Services\AuditService;
 use App\Services\MissionService;
 use App\Services\NotificationService;
 use App\Services\PointsEngine;
+use App\Services\SpinGrantService;
 use App\Support\DateRangeQuery;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -39,7 +40,7 @@ class PurchaseController extends Controller
 
         DateRangeQuery::applyCoalesce($query, $request, ['sold_at', 'created_at']);
 
-        $perPage = min(200, max(1, (int) $request->input('per_page', 20)));
+        $perPage = $this->perPage($request, 20, 200);
 
         return response()->json([
             'purchases' => $query->paginate($perPage),
@@ -62,7 +63,9 @@ class PurchaseController extends Controller
 
         $data = $this->validated($request);
 
-        $purchase = DB::transaction(function () use ($data) {
+        $grantSpins = (int) ($data['grant_spins'] ?? 0);
+
+        $purchase = DB::transaction(function () use ($data, $grantSpins, $request) {
             $customer = User::where('role', 'customer')->lockForUpdate()->findOrFail($data['user_id']);
             $amount = (int) $data['amount'];
             $redeemPoints = (int) ($data['points_to_redeem'] ?? 0);
@@ -115,6 +118,15 @@ class PurchaseController extends Controller
             $freshCustomer = $customer->fresh();
             if ($earn['points'] > 0) {
                 NotificationService::pointsEarned($freshCustomer, $earn['points'], 'purchase');
+            }
+
+            if ($grantSpins > 0) {
+                app(SpinGrantService::class)->grant(
+                    user: $freshCustomer,
+                    count: $grantSpins,
+                    source: 'purchase',
+                    actorId: $request->user()?->id,
+                );
             }
 
             return $purchase->load('user:id,name,email,phone,tier,points,redeemable_points,tier_points_365d,total_spent');
@@ -312,6 +324,7 @@ class PurchaseController extends Controller
             'product_type' => [$required, Rule::in(['Gold', 'Diamond', 'Jade', 'Ruby', 'Silver', 'Watch', 'Other'])],
             'amount' => [$required, 'integer', 'min:1000'],
             'points_to_redeem' => ['nullable', 'integer', 'min:0'],
+            'grant_spins' => ['nullable', 'integer', 'min:0', 'max:50'],
             'payment_method' => [$required, Rule::in(['Cash', 'Bank', 'KPay', 'WavePay', 'Visa/Master'])],
         ]);
     }

@@ -33,6 +33,14 @@ import CustomerReviews from './pages/customer/Reviews'
 import Settings from './pages/Settings'
 import HelpFeedback from './pages/HelpFeedback'
 import Notifications from './pages/Notifications'
+import CustomerSpin from './modules/spinwheel/pages/CustomerSpin'
+import GuestSpin from './modules/spinwheel/pages/GuestSpin'
+import AdminSpinDashboard from './modules/spinwheel/pages/admin/AdminSpinDashboard'
+import AdminSpinWheel from './modules/spinwheel/pages/admin/AdminSpinWheel'
+import AdminSpinPrizes from './modules/spinwheel/pages/admin/AdminSpinPrizes'
+import AdminSpinUsage from './modules/spinwheel/pages/admin/AdminSpinUsage'
+import AdminSpinRewards from './modules/spinwheel/pages/admin/AdminSpinRewards'
+import AdminGuestSpins from './modules/spinwheel/pages/admin/AdminGuestSpins'
 import {
   faBell,
   faBoxOpen,
@@ -41,6 +49,7 @@ import {
   faClipboardList,
   faComments,
   faCrown,
+  faDice,
   faEnvelopeOpenText,
   faGear,
   faGem,
@@ -63,8 +72,19 @@ const staffLinks = [
 
 const adminLinks = [
   { to: '/admin', labelKey: 'dashboard', end: true, icon: faChartLine },
-  { to: '/admin/inbox', labelKey: 'chatInboxTitle', icon: faComments, badge: 'chat' },
-  ...staffLinks.slice(1, 5),
+  ...staffLinks.slice(0, 5),
+  {
+    to: '/admin/spinwheel',
+    labelKey: 'spinwheel',
+    icon: faDice,
+    children: [
+      { to: '/admin/spinwheel', labelKey: 'spinwheelOverview', end: true },
+      { to: '/admin/spinwheel/wheel', labelKey: 'spinwheelConfig' },
+      { to: '/admin/spinwheel/usage', labelKey: 'spinwheelUsage' },
+      { to: '/admin/spinwheel/rewards', labelKey: 'spinwheelRewards' },
+      { to: '/admin/spinwheel/guest-spins', labelKey: 'spinwheelGuestSpins' },
+    ],
+  },
   { to: '/admin/rewards', labelKey: 'rewardsCatalog', icon: faShoppingBag },
   { to: '/admin/promotions', labelKey: 'promotions', icon: faPercent },
   { to: '/admin/missions', labelKey: 'manageMissions', icon: faTrophy },
@@ -80,6 +100,7 @@ const adminLinks = [
 
 const customerLinks = [
   { to: '/app', labelKey: 'membership', end: true, icon: faCrown },
+  { to: '/app/spinwheel', labelKey: 'spinwheel', icon: faDice },
   { to: '/app/inbox', labelKey: 'chatSupportTitle', icon: faComments, badge: 'chat' },
   { to: '/app/history', labelKey: 'purchaseHistory', icon: faReceipt },
   { to: '/app/points', labelKey: 'pointsActivity', icon: faGem },
@@ -113,6 +134,12 @@ export default function App() {
             <Route path="/admin/inbox" element={<ChatInbox />} />
             <Route path="/admin/customers" element={<AdminCustomers />} />
             <Route path="/admin/purchases" element={<AdminPurchases />} />
+            <Route path="/admin/spinwheel" element={<AdminOnly><AdminSpinDashboard /></AdminOnly>} />
+            <Route path="/admin/spinwheel/wheel" element={<AdminOnly><AdminSpinWheel /></AdminOnly>} />
+            <Route path="/admin/spinwheel/prizes/:id" element={<AdminOnly><AdminSpinPrizes /></AdminOnly>} />
+            <Route path="/admin/spinwheel/usage" element={<AdminOnly><AdminSpinUsage /></AdminOnly>} />
+            <Route path="/admin/spinwheel/rewards" element={<AdminOnly><AdminSpinRewards /></AdminOnly>} />
+            <Route path="/admin/spinwheel/guest-spins" element={<AdminOnly><AdminGuestSpins /></AdminOnly>} />
             <Route path="/admin/rewards" element={<AdminOnly><AdminRewards /></AdminOnly>} />
             <Route path="/admin/redemptions" element={<AdminRedemptions />} />
             <Route path="/admin/promotions" element={<AdminOnly><AdminPromotions /></AdminOnly>} />
@@ -133,6 +160,7 @@ export default function App() {
         <Route element={<ProtectedRoute role="customer" />}>
           <Route element={<PanelLayout titleKey="memberApp" links={customerLinks} />}>
             <Route path="/app" element={<CustomerMembership />} />
+            <Route path="/app/spinwheel" element={<CustomerSpin />} />
             <Route path="/app/inbox" element={<ChatInbox />} />
             <Route path="/app/history" element={<CustomerHistory />} />
             <Route path="/app/points" element={<PointsActivity />} />
@@ -147,6 +175,8 @@ export default function App() {
             <Route path="/app/help" element={<HelpFeedback />} />
           </Route>
         </Route>
+
+        <Route path="/guest/:token" element={<GuestSpin />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

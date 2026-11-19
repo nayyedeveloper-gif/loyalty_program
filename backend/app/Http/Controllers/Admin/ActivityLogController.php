@@ -35,7 +35,7 @@ class ActivityLogController extends Controller
         DateRangeQuery::apply($query, $request);
 
         return response()->json([
-            'logs' => $query->paginate((int) $request->integer('per_page', 30)),
+            'logs' => $query->paginate($this->perPage($request, 30, 200)),
         ]);
     }
 }

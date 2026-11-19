@@ -11,6 +11,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call(FaqSeeder::class);
         $this->call(MissionSeeder::class);
+        $this->call(SpinWheelSeeder::class);
 
         User::create([
             'name' => '29 Admin',

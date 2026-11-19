@@ -44,7 +44,7 @@ class LedgerController extends Controller
 
         DateRangeQuery::apply($query, $request);
 
-        $ledger = $query->paginate((int) $request->integer('per_page', 20));
+        $ledger = $query->paginate($this->perPage($request, 20, 200));
 
         return response()->json(['ledger' => $ledger]);
     }

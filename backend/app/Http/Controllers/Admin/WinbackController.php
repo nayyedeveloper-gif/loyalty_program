@@ -38,7 +38,7 @@ class WinbackController extends Controller
             });
         }
 
-        $customers = $query->paginate((int) $request->integer('per_page', 20));
+        $customers = $query->paginate($this->perPage($request, 20, 200));
 
         $customers->getCollection()->transform(function (User $user) {
             $recentWinback = PointLedger::query()

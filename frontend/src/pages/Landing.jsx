@@ -68,6 +68,9 @@ export default function Landing() {
             <a href="#how-it-works" className="btn btn-landing-ghost">
               {t('learnMore')}
             </a>
+            <a href="/download/" className="btn btn-landing-ghost">
+              {t('downloadApp')}
+            </a>
           </div>
         </div>
       </header>

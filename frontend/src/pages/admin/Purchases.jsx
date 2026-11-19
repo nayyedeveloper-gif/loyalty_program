@@ -38,6 +38,7 @@ const emptyForm = {
   product_type: 'Gold',
   amount: '',
   points_to_redeem: '0',
+  grant_spins: '0',
   payment_method: 'Cash',
 }
 
@@ -187,6 +188,7 @@ export default function AdminPurchases() {
       user_id: Number(form.user_id),
       amount: Number(form.amount),
       points_to_redeem: Number(form.points_to_redeem || 0),
+      grant_spins: editing ? undefined : Number(form.grant_spins || 0),
     }
     try {
       if (editing) {
@@ -556,6 +558,20 @@ export default function AdminPurchases() {
               onChange={(e) => setForm({ ...form, points_to_redeem: e.target.value })}
             />
           </div>
+          {!editing && (
+            <div className="field">
+              <label htmlFor="purchase-grant-spins">{t('grantSpins')}</label>
+              <input
+                id="purchase-grant-spins"
+                type="number"
+                min={0}
+                max={50}
+                value={form.grant_spins}
+                onChange={(e) => setForm({ ...form, grant_spins: e.target.value })}
+              />
+              <p className="type-meta text-[var(--color-muted)]">{t('grantSpinsHint')}</p>
+            </div>
+          )}
           <p className="type-meta text-[var(--color-muted)]">{t('purchaseHint')}</p>
           <div className="flex justify-end gap-2 pt-2 flex-wrap">
             <button type="button" className="btn btn-ghost" onClick={closeModal}>

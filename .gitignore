@@ -45,3 +45,6 @@ Thumbs.db
 *.local
 
 frontend/dev-dist/
+
+# Nested full spinwheel source copy (reference only; not part of host app)
+spinwheel-29/

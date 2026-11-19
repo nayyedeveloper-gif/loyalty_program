@@ -27,7 +27,7 @@ class RewardController extends Controller
             $query->where('is_active', filter_var($request->input('active'), FILTER_VALIDATE_BOOLEAN));
         }
 
-        $rewards = $query->paginate((int) $request->integer('per_page', 20));
+        $rewards = $query->paginate($this->perPage($request, 20, 200));
 
         return response()->json(['rewards' => $rewards]);
     }

@@ -42,7 +42,7 @@ class FeedbackController extends Controller
 
         DateRangeQuery::apply($query, $request);
 
-        $feedback = $query->paginate((int) $request->integer('per_page', 20));
+        $feedback = $query->paginate($this->perPage($request, 20, 200));
 
         return response()->json(['feedback' => $feedback]);
     }

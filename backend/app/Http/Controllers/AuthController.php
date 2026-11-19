@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\MissionService;
 use App\Services\NotificationService;
 use App\Services\PointsEngine;
+use App\Services\SpinGrantService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -29,7 +30,7 @@ class AuthController extends Controller
             'referral_code' => ['nullable', 'string', 'max:32'],
         ]);
 
-        $user = DB::transaction(function () use ($data) {
+        [$user, $spinGrant] = DB::transaction(function () use ($data) {
             $referrer = null;
             if (! empty($data['referral_code'])) {
                 $referrer = User::where('role', 'customer')
@@ -67,7 +68,9 @@ class AuthController extends Controller
                 }
             }
 
-            return $user->fresh();
+            $spinGrant = app(SpinGrantService::class)->grantOnRegistration($user);
+
+            return [$user->fresh(), $spinGrant];
         });
 
         $token = $user->createToken('auth')->plainTextToken;
@@ -76,6 +79,7 @@ class AuthController extends Controller
             'message' => 'Account created successfully.',
             'user' => $user,
             'token' => $token,
+            'spin_grant' => $spinGrant,
         ], 201);
     }
 
@@ -119,11 +123,15 @@ class AuthController extends Controller
         }
 
         $token = $user->createToken('auth')->plainTextToken;
+        $spinGrant = $user->isCustomer()
+            ? app(SpinGrantService::class)->pendingRegistrationNotice($user)
+            : null;
 
         return response()->json([
             'message' => 'Signed in successfully.',
             'user' => $user->fresh(),
             'token' => $token,
+            'spin_grant' => $spinGrant,
         ]);
     }
 
@@ -193,7 +201,7 @@ class AuthController extends Controller
 
         $payload = ['message' => 'If that email exists, an OTP has been sent.'];
 
-        if (app()->environment('local')) {
+        if (app()->isLocal() && config('app.debug')) {
             $payload['debug_otp'] = $otp;
         }
 

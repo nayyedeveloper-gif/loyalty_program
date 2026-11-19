@@ -5,4 +5,6 @@ return [
     'api_key' => (string) env('SALESENTRY_API_KEY', ''),
     'per_page' => (int) env('SALESENTRY_PER_PAGE', 200),
     'timeout' => (int) env('SALESENTRY_TIMEOUT', 90),
+    // Path to a CA bundle (e.g. storage/certs/cacert.pem). Empty = PHP default.
+    'ca_bundle' => (string) env('SALESENTRY_CA_BUNDLE', ''),
 ];

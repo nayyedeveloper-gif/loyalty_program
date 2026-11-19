@@ -28,7 +28,7 @@ class PromotionController extends Controller
         }
 
         return response()->json([
-            'promotions' => $query->paginate((int) $request->integer('per_page', 20)),
+            'promotions' => $query->paginate($this->perPage($request, 20, 200)),
         ]);
     }
 

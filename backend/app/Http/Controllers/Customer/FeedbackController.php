@@ -17,7 +17,7 @@ class FeedbackController extends Controller
             ->with(['replies.user:id,name,role'])
             ->withCount('replies')
             ->latest()
-            ->paginate((int) $request->integer('per_page', 20));
+            ->paginate($this->perPage($request, 20, 100));
 
         return response()->json(['feedback' => $feedback]);
     }

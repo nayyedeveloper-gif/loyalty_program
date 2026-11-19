@@ -4,16 +4,40 @@ Modern loyalty / membership app for a Myanmar jewellery shop.
 
 - **Backend:** Laravel 12 + Sanctum (API tokens, bcrypt passwords)
 - **Frontend:** React + Vite + Tailwind CSS
+- **Mobile:** Flutter (Android / iOS) member app in `mobile/`
 - **Auth:** Sign in, Sign up, Forgot password (email OTP)
-- **RBAC:** Admin portal (`/admin`) · Customer app (`/app`)
+- **RBAC:** Admin portal (`/admin`) · Customer app (`/app`) · Mobile member app
 
 ## Quick start
 
-### Backend
+### Backend (MySQL)
+Use [Docker](https://www.docker.com/) for a local database, or any MySQL 8+ host.
+
 ```bash
+# from repo root — optional local DB
+docker compose up -d
+
 cd backend
+cp .env.example .env   # if needed
+php artisan key:generate
+php artisan migrate
+php artisan db:seed
+
+# one-time copy from old SQLite (if you still have database/database.sqlite)
+php artisan db:import-sqlite --truncate
+
 php artisan serve
 ```
+
+API docs (Swagger UI, local by default): http://127.0.0.1:8000/docs/api — OpenAPI JSON at `/docs/api.json`.
+
+Purchases and customer names are filled from Sales Entry:
+
+```bash
+php artisan loyalty:sync-salesentry --fresh --full
+```
+
+Set `SALESENTRY_API_KEY` in `backend/.env` first.
 
 ### Frontend
 ```bash
@@ -22,6 +46,15 @@ npm run dev
 ```
 
 Open http://localhost:5173
+
+### Mobile (Flutter)
+```bash
+cd mobile
+flutter pub get
+flutter run
+```
+
+See [`mobile/README.md`](mobile/README.md) for API URL flags (emulator vs device vs iOS simulator).
 
 ## Demo accounts
 | Role | Email | Password |
@@ -41,3 +74,17 @@ OTP emails are written to `backend/storage/logs/laravel.log` in local mode. The 
 | CIP | Above 1,000 lakh | 2.0x |
 
 Points: **1 point / 10,000 MMK** net purchase, then × tier multiplier.
+
+## Spinwheel module
+
+Integrated as a separate module sharing Sanctum users + the same DB (see `docs/INTEGRATION_AI_BRIEF.md`).
+
+| Surface | URL |
+|---------|-----|
+| Customer wheel | `/app/spinwheel` |
+| Admin spin tools | `/admin/spinwheel` |
+| Guest one-spin link | `/guest/:token` (public) |
+
+Backend API prefix: `/api/spinwheel`. Set `FRONTEND_URL` in `backend/.env` to the SPA origin (default `http://127.0.0.1:5173`) so guest links are correct. Run `php artisan storage:link` for prize/logo images.
+
+Spin credits are granted via admin **Spin credits**, optional purchase `grant_spins`, and spinwheel settings (registration / login promo). Loyalty `PointsEngine` is unchanged.

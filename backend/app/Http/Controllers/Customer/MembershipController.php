@@ -58,7 +58,7 @@ class MembershipController extends Controller
         $purchases = $request->user()
             ->purchases()
             ->latest()
-            ->paginate(12);
+            ->paginate($this->perPage($request, 12, 50));
 
         return response()->json(['purchases' => $purchases]);
     }
@@ -83,7 +83,7 @@ class MembershipController extends Controller
             $query->where('type', $type);
         }
 
-        $entries = $query->paginate((int) $request->integer('per_page', 20));
+        $entries = $query->paginate($this->perPage($request, 20, 100));
 
         return response()->json(['ledger' => $entries]);
     }
@@ -229,7 +229,7 @@ class MembershipController extends Controller
             ->with('rewardItem:id,name,category,fulfillment,points_cost')
             ->where('user_id', $request->user()->id)
             ->latest()
-            ->paginate(20);
+            ->paginate($this->perPage($request, 20, 100));
 
         return response()->json(['redemptions' => $redemptions]);
     }

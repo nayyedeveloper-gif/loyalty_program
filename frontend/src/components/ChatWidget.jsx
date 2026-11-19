@@ -12,8 +12,6 @@ import {
   previewMessageText,
 } from '../lib/chatMedia'
 import { fetchGifCategories, fetchGifs, gifSearchPlaceholder } from '../lib/gifApi'
-import { useChatCall } from '../hooks/useChatCall'
-import ChatCallOverlay from './ChatCallOverlay'
 import ChatMessageRow from './ChatMessageRow'
 import ChatPhotoPicker from './ChatPhotoPicker'
 import ChatStartCustomerModal from './ChatStartCustomerModal'
@@ -30,7 +28,6 @@ import {
   faPaperclip,
   faPaperPlane,
   faPause,
-  faPhone,
   faPlay,
   faPlus,
   faReply,
@@ -224,16 +221,11 @@ export default function ChatWidget() {
     loadConversations,
     sendMessage,
     editMessage,
+    deleteMessage,
     typingLabel,
     notifyTyping,
   } = useChat()
 
-  const onIncomingInvite = useMemo(
-    () => (conversationId) => {
-      openMessenger({ conversationId: conversationId || null })
-    },
-    [openMessenger],
-  )
   const [draft, setDraft] = useState('')
   const [replyTo, setReplyTo] = useState(null)
   const [startOpen, setStartOpen] = useState(false)
@@ -269,13 +261,6 @@ export default function ChatWidget() {
     return t('chatInboxTitle')
   }, [isStaff, view, activeConversation, t])
 
-  const callPeerName = useMemo(() => {
-    if (isStaff) return activeConversation?.customer?.name || t('customer')
-    return t('chatSupportAgent')
-  }, [isStaff, activeConversation, t])
-
-  const inThread = !isStaff || view === 'thread'
-  const canCall = !!activeConversation?.id && inThread && !sending
   const showCompactInbox = isStaff && view === 'inbox'
 
   useEffect(() => {
@@ -298,24 +283,6 @@ export default function ChatWidget() {
     }
     setInboxSearch('')
   }
-
-  const {
-    call,
-    muted,
-    error: callError,
-    remoteAudioRef,
-    startCall,
-    acceptCall,
-    rejectCall,
-    endCall,
-    toggleMute,
-  } = useChatCall({
-    user,
-    conversationId: activeConversation?.id || null,
-    peerName: callPeerName,
-    isStaff,
-    onIncomingInvite,
-  })
 
   const showGifResults = !!gifDebouncedQuery.trim() || !!gifCategory
 
@@ -625,37 +592,35 @@ export default function ChatWidget() {
   }
 
   if (!user || typeof document === 'undefined') return null
-  // Full inbox page owns the messenger UI — keep the floating widget for calls only there.
-  if (onInboxPage && !call) return null
+  // Full inbox page owns the messenger UI — hide floating widget there.
+  if (onInboxPage) return null
 
   const canSendText = !!draft.trim() && !sending && !!activeConversation
   const pickerOpen = picker === 'gif' || picker === 'emoji' || picker === 'photo'
 
   return createPortal(
     <div className="chat-widget-root">
-      {!onInboxPage ? (
-        <button
-          type="button"
-          className={`chat-fab${open ? ' is-open' : ''}`}
-          onClick={() => (open ? handleCloseMessenger() : openMessenger())}
-          aria-label={t('chatOpen')}
-          title={t('chatOpen')}
-        >
-          <FontAwesomeIcon icon={open ? faXmark : faComments} aria-hidden="true" />
-          {!open && unreadCount > 0 ? (
-            <span className="chat-fab-badge" aria-label={t('chatUnread', { count: unreadCount })}>
-              {unreadCount > 99 ? '99+' : unreadCount}
-            </span>
-          ) : null}
-        </button>
-      ) : null}
+      <button
+        type="button"
+        className={`chat-fab${open ? ' is-open' : ''}`}
+        onClick={() => (open ? handleCloseMessenger() : openMessenger())}
+        aria-label={t('chatOpen')}
+        title={t('chatOpen')}
+      >
+        <FontAwesomeIcon icon={open ? faXmark : faComments} aria-hidden="true" />
+        {!open && unreadCount > 0 ? (
+          <span className="chat-fab-badge" aria-label={t('chatUnread', { count: unreadCount })}>
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </span>
+        ) : null}
+      </button>
 
       <div
-        className={`chat-panel${open || call ? ' is-open' : ''}`}
+        className={`chat-panel${open ? ' is-open' : ''}`}
         role="dialog"
         aria-modal="false"
         aria-label={t('chatSupportTitle')}
-        aria-hidden={!open && !call}
+        aria-hidden={!open}
       >
         <header className="chat-panel-head">
           <div className="chat-panel-head-main">
@@ -683,18 +648,6 @@ export default function ChatWidget() {
             </div>
           </div>
           <div className="chat-panel-head-actions">
-            {canCall ? (
-              <button
-                type="button"
-                className="chat-icon-btn chat-call-head-btn"
-                onClick={() => startCall()}
-                aria-label={t('chatCallAudio')}
-                title={t('chatCallAudio')}
-                disabled={!!call}
-              >
-                <FontAwesomeIcon icon={faPhone} aria-hidden="true" />
-              </button>
-            ) : null}
             <button
               type="button"
               className="chat-icon-btn"
@@ -714,18 +667,6 @@ export default function ChatWidget() {
             </button>
           </div>
         </header>
-
-        <ChatCallOverlay
-          call={call}
-          muted={muted}
-          error={callError}
-          remoteAudioRef={remoteAudioRef}
-          onAccept={acceptCall}
-          onReject={rejectCall}
-          onEnd={endCall}
-          onToggleMute={toggleMute}
-          t={t}
-        />
 
         {error ? <div className="chat-error">{error}</div> : null}
 
@@ -832,6 +773,7 @@ export default function ChatWidget() {
                     inputRef.current?.focus()
                   }}
                   onEdit={editMessage}
+                  onDelete={deleteMessage}
                   t={t}
                   lang={lang}
                 />
